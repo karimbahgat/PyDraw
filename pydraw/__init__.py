@@ -302,7 +302,10 @@ class Image(object):
                 buff = fillsize/2.0
                 xchange = x2-x1
                 ychange = y2-y1
-                origslope = ychange/float(xchange)
+                try:
+                    origslope = ychange/float(xchange)
+                except ZeroDivisionError:
+                    origslope = ychange
                 angl = math.degrees(math.atan(origslope))
                 #leftline
                 leftangl = angl-90
@@ -626,7 +629,10 @@ class _Line:
         self.x1,self.y1,self.x2,self.y2 = x1,y1,x2,y2
         self.xdiff = x2-x1
         self.ydiff = y2-y1
-        self.slope = self.ydiff/float(self.xdiff)
+        try:
+            self.slope = self.ydiff/float(self.xdiff)
+        except ZeroDivisionError:
+            self.slope = self.ydiff
         self.zero_y = self.slope*(0-x1)+y1
     def tolist(self):
         return ((self.x1,self.y1),(self.x2,self.y2))
