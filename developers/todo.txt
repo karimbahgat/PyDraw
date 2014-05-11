@@ -1,0 +1,7 @@
+To do list:
+
+- For lines implement line fill algorithm by drawing rectangles instead of points, http://www.tophatstuff.co.uk/archive.php?p=106
+- For polygons implement scanline fill algorithm, http://www.sccs.swarthmore.edu/users/02/jill/graphics/hw3/hw3.html
+- For circles implement circle fill, http://www.sccs.swarthmore.edu/users/02/jill/graphics/hw3/hw3.html
+
+- Maybe after this, contribute some of this into the PNGCANVAS project, https://github.com/rcarmo/pngcanvas

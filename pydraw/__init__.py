@@ -291,16 +291,15 @@ class Image(object):
 ##        - bendside is left or right side to bend
 ##        - bendanchor is the float ratio to offset the bend from its default anchor point at the center of the line.
         
-        #for now just switch fill and outline colors bc fill not working yet
-        fillcolor,outlinecolor = outlinecolor,fillcolor
         #decide to draw single or thick line with outline
         if fillsize == 1:
             #draw single line
-            self._drawsimpleline(x1, y1, x2, y2, col=outlinecolor)
+            self._drawsimpleline(x1, y1, x2, y2, col=fillcolor)
         else:
             if outlinecolor:
+                linepolygon = []
                 #get orig params
-                buff = fillsize
+                buff = fillsize/2.0
                 xchange = x2-x1
                 ychange = y2-y1
                 origslope = ychange/float(xchange)
@@ -312,15 +311,23 @@ class Image(object):
                 leftx1,leftx2 = (x1-leftxbuff,x2-leftxbuff)
                 lefty1,lefty2 = (y1-leftybuff,y2-leftybuff)
                 leftlinecoords = (leftx1,lefty1,leftx2,lefty2)
-                self._drawsimpleline(*leftlinecoords,col=outlinecolor)
+                linepolygon.extend(leftlinecoords)
                 #rightline
                 rightangl = angl-90
                 rightybuff = buff * math.sin(math.radians(rightangl))
                 rightxbuff = buff * math.cos(math.radians(rightangl))
                 rightx1,rightx2 = (x1+rightxbuff,x2+rightxbuff)
                 righty1,righty2 = (y1+rightybuff,y2+rightybuff)
-                rightlinecoords = (rightx1,righty1,rightx2,righty2)
-                self._drawsimpleline(*rightlinecoords,col=outlinecolor)
+                rightlinecoords = (rightx2,righty2,rightx1,righty1)
+                linepolygon.extend(rightlinecoords)
+                #finally draw the thick line as a polygon
+                linepolygon = map(round, linepolygon)
+                linepolygon = map(int, linepolygon)
+                def groupby2(iterable):
+                    args = [iter(iterable)] * 2
+                    return itertools.izip(*args)
+                linepolygon = list(groupby2(linepolygon))
+                self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor)
                 
     def drawmultiline(self, coords, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, outlinewidth=1): #, bendfactor=None, bendside=None, bendanchor=None):
         """
@@ -407,7 +414,7 @@ class Image(object):
             plot(x, ybase+1, ydeci, col, steep)
             intery = intery + gradient
 
-    def drawbezier(self, xypoints, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, intervals=100):
+    def drawbezier(self, xypoints, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, intervals=100):
         """
         Draws a bezier curve given a list of coordinate control point pairs.
         Mostly taken directly from a stackoverflow post...
@@ -419,36 +426,8 @@ class Image(object):
         | *intervals | how finegrained/often the curve should be bent, default is 100, ie curves every one percent of the line.
         
         """
-        # xys should be a sequence of 2-tuples (Bezier control points)
-        def pascal_row(n):
-            # This returns the nth row of Pascal's Triangle
-            result = [1]
-            x, numerator = 1, n
-            for denominator in range(1, n//2+1):
-                # print(numerator,denominator,x)
-                x *= numerator
-                x /= denominator
-                result.append(x)
-                numerator -= 1
-            if n&1 == 0:
-                # n is even
-                result.extend(reversed(result[:-1]))
-            else:
-                result.extend(reversed(result)) 
-            return result
-        n = len(xypoints)
-        combinations = pascal_row(n-1)
-        ts = (t/100.0 for t in xrange(intervals+1))
-        # This uses the generalized formula for bezier curves
-        # http://en.wikipedia.org/wiki/B%C3%A9zier_curve#Generalization
-        result = []
-        for t in ts:
-            tpowers = (t**i for i in range(n))
-            upowers = reversed([(1-t)**i for i in range(n)])
-            coefs = [c*a*b for c, a, b in zip(combinations, tpowers, upowers)]
-            result.append(
-                tuple(sum([coef*p for coef, p in zip(coefs, ps)]) for ps in zip(*xypoints)))
-        self.drawmultiline(result, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
+        curve = _Bezier(xypoints, intervals)
+        self.drawmultiline(curve.coords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
 
     def drawcircle(self, x, y, fillsize, fillcolor=None, outlinecolor=(0,0,0), outlinewidth=1): #, flatten=None, flatangle=None):
         """
@@ -492,20 +471,68 @@ class Image(object):
         | **other | also accepts various color and size arguments, see the docstring for drawline.
         
         """
-        #first draw lines
+        #maybe autocomplete polygon
         if coords[-1] != coords[0]:
             coords = list(coords)
             coords.append(coords[0])
+        #first fill insides of polygon
+        if fillcolor:
+            def pairwise(iterable):
+                a,b = itertools.tee(iterable)
+                next(b, None)
+                return itertools.izip(a,b)
+            def flatten(iterable):
+                return itertools.chain.from_iterable(iterable)
+            def groupby2(iterable):
+                args = [iter(iterable)] * 2
+                return itertools.izip(*args)
+            #main
+            ysortededges = [ list(flatten(sorted(eachedge, key=operator.itemgetter(1)))) for eachedge in pairwise(coords) ]
+            ysortededges = list(sorted(ysortededges, key=operator.itemgetter(1)))
+            edgeindex = 0
+            curedge = ysortededges[edgeindex]
+            checkedges = []
+            #get bbox
+            xs, ys = zip(*coords)
+            bbox = [min(xs), min(ys), max(xs), max(ys)]
+            #begin
+            xmin,ymin,xmax,ymax = bbox
+            for y in xrange(ymin,ymax+1):
+                fillxs = []
+                #collect relevant edges
+                "first from previous old ones"
+                tempcollect = [tempedge for tempedge in checkedges if tempedge[3] > y]
+                "then from new ones"
+                while curedge[1] <= y and edgeindex < len(ysortededges):
+                    tempcollect.append(curedge)
+                    edgeindex += 1
+                    try:
+                        curedge = ysortededges[edgeindex]
+                    except IndexError:
+                        break   #just to make higher
+                if tempcollect:
+                    checkedges = tempcollect
+                #find intersect
+                scanline = _Line(xmin,y,xmax,y)
+                for edge in checkedges:
+                    edge = _Line(*edge)
+                    intersection = scanline.intersect(edge)
+                    if intersection:
+                        ix,iy = intersection
+                        fillxs.append(ix)
+                #scan line and fill
+                fillxs = sorted(fillxs)
+                if fillxs:
+                    for fillmin,fillmax in groupby2(fillxs):
+                        fillmin,fillmax = map(int,(fillmin,fillmax))
+                        for x in xrange(fillmin,fillmax+1):
+                            self.put(x,y,fillcolor)
+        #then draw outline
         for index in xrange(len(coords)-1):
             start,end = coords[index],coords[index+1]
             linecoords = list(start)
             linecoords.extend(list(end))
             self.drawline(*linecoords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None)
-        #then find one inside point
-        #...
-        insidepoint = (coords[0][0]+1,coords[0][1]+1)
-        #then floodfill (but should be in a virtual clean space)
-        self.floodfill(*insidepoint, fillcolor=fillcolor, fuzzythresh=1.0)
 
     def floodfill(self,x,y,fillcolor,fuzzythresh=1.0):
         """
@@ -593,4 +620,78 @@ class Image(object):
         tkimg.put(imgstring)
         return tkimg
 
+#INTERNAL HELPER CLASSES
+class _Line:
+    def __init__(self, x1,y1,x2,y2):
+        self.x1,self.y1,self.x2,self.y2 = x1,y1,x2,y2
+        self.xdiff = x2-x1
+        self.ydiff = y2-y1
+        self.slope = self.ydiff/float(self.xdiff)
+        self.zero_y = self.slope*(0-x1)+y1
+    def tolist(self):
+        return ((self.x1,self.y1),(self.x2,self.y2))
+    def intersect(self, otherline):
+        """
+        Input must be another line instance
+        Finds imaginary intersect assuming lines go forever, regardless of real intersect
+        Based on http://stackoverflow.com/questions/20677795/find-the-point-of-intersecting-lines
+        """
+        D  = -self.ydiff * otherline.xdiff - self.xdiff * -otherline.ydiff
+        Dx = self._selfprod() * otherline.xdiff - self.xdiff * otherline._selfprod()
+        Dy = -self.ydiff * otherline._selfprod() - self._selfprod() * -otherline.ydiff
+        if D != 0:
+            x = Dx / D
+            y = Dy / D
+            return x,y
+        else:
+            return False
+    #INTERNAL USE ONLY
+    def _selfprod(self):
+        """
+        Used by the line intersect method
+        """
+        return -(self.x1*self.y2 - self.x2*self.y1)
+class _Bezier:
+    def __init__(self, xypoints, intervals):
+        # xys should be a sequence of 2-tuples (Bezier control points)
+        def pascal_row(n):
+            # This returns the nth row of Pascal's Triangle
+            result = [1]
+            x, numerator = 1, n
+            for denominator in range(1, n//2+1):
+                # print(numerator,denominator,x)
+                x *= numerator
+                x /= denominator
+                result.append(x)
+                numerator -= 1
+            if n&1 == 0:
+                # n is even
+                result.extend(reversed(result[:-1]))
+            else:
+                result.extend(reversed(result)) 
+            return result
+        n = len(xypoints)
+        combinations = pascal_row(n-1)
+        ts = (t/100.0 for t in xrange(intervals+1))
+        # This uses the generalized formula for bezier curves
+        # http://en.wikipedia.org/wiki/B%C3%A9zier_curve#Generalization
+        result = []
+        for t in ts:
+            tpowers = (t**i for i in range(n))
+            upowers = reversed([(1-t)**i for i in range(n)])
+            coefs = [c*a*b for c, a, b in zip(combinations, tpowers, upowers)]
+            result.append(
+                tuple(sum([coef*p for coef, p in zip(coefs, ps)]) for ps in zip(*xypoints)))
+        self.coords = result
 
+
+if __name__ == "__main__":
+    img = Image().new(100,100)
+    img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
+    #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
+    img.drawline(22,11,88,77,fillcolor=(222,0,0),fillsize=8)
+    #img.drawbezier([(11,11),(90,40),(90,90)])
+    #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
+    #img.drawcircle(90,50,fillsize=5, fillcolor=(0,0,0))
+    img.view()
+    img.save("C:/Users/BIGKIMO/Desktop/hmm.gif")
