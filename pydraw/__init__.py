@@ -271,9 +271,18 @@ class Image(object):
         | color | RGB color tuple to set to the pixel
 
         """
-        self.imagegrid[y][x] = color
+        if len(color)==3:
+            #solid color
+            self.imagegrid[y][x] = color
+        elif len(color)==4:
+            #transparent color, blend with background
+            t = color[3]/255.0
+            p = self.get(int(x),int(y))
+            col = color
+            newcolor = (int((p[0]*(1-t)) + col[0]*t), int((p[1]*(1-t)) + col[1]*t), int((p[2]*(1-t)) + col[2]*t))
+            self.imagegrid[y][x] = newcolor
         
-    def drawline(self, x1, y1, x2, y2, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, outlinewidth=1): #, bendfactor=None, bendside=None, bendanchor=None):
+    def drawline(self, x1, y1, x2, y2, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
         Draws a single line.
 
@@ -296,7 +305,7 @@ class Image(object):
             #draw single line
             self._drawsimpleline(x1, y1, x2, y2, col=fillcolor)
         else:
-            if outlinecolor:
+            if outlinecolor or fillcolor:
                 linepolygon = []
                 #get orig params
                 buff = fillsize/2.0
@@ -314,7 +323,6 @@ class Image(object):
                 leftx1,leftx2 = (x1-leftxbuff,x2-leftxbuff)
                 lefty1,lefty2 = (y1-leftybuff,y2-leftybuff)
                 leftlinecoords = (leftx1,lefty1,leftx2,lefty2)
-                linepolygon.extend(leftlinecoords)
                 #rightline
                 rightangl = angl-90
                 rightybuff = buff * math.sin(math.radians(rightangl))
@@ -322,17 +330,32 @@ class Image(object):
                 rightx1,rightx2 = (x1+rightxbuff,x2+rightxbuff)
                 righty1,righty2 = (y1+rightybuff,y2+rightybuff)
                 rightlinecoords = (rightx2,righty2,rightx1,righty1)
-                linepolygon.extend(rightlinecoords)
                 #finally draw the thick line as a polygon
-                linepolygon = map(round, linepolygon)
-                linepolygon = map(int, linepolygon)
-                def groupby2(iterable):
-                    args = [iter(iterable)] * 2
-                    return itertools.izip(*args)
-                linepolygon = list(groupby2(linepolygon))
-                self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor)
-                
-    def drawmultiline(self, coords, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, outlinewidth=1): #, bendfactor=None, bendside=None, bendanchor=None):
+                if capstyle == "butt":
+                    linepolygon.extend(leftlinecoords)
+                    linepolygon.extend(rightlinecoords)
+                    linepolygon = map(round, linepolygon)
+                    linepolygon = map(int, linepolygon)
+                    def groupby2(iterable):
+                        args = [iter(iterable)] * 2
+                        return itertools.izip(*args)
+                    linepolygon = list(groupby2(linepolygon))
+                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor)
+                elif capstyle == "round":
+                    linepolygon.extend(leftlinecoords)
+                    linepolygon.extend(_Bezier([leftlinecoords[-1],(90,50),rightlinecoords[0]],10).coords)
+                    linepolygon.extend(rightlinecoords)
+                    linepolygon = map(round, linepolygon)
+                    linepolygon = map(int, linepolygon)
+                    def groupby2(iterable):
+                        args = [iter(iterable)] * 2
+                        return itertools.izip(*args)
+                    linepolygon = list(groupby2(linepolygon))
+                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor)
+                elif capstyle == "projecting":
+                    pass
+
+    def drawmultiline(self, coords, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, outlinewidth=1, joinstyle="miter"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
         Draws multiple lines between a list of coordinates, useful for making them connect together.
         
@@ -341,6 +364,14 @@ class Image(object):
         | coords | list of coordinate point pairs to be connected by lines
         | **other | also accepts various color and size arguments, see the docstring for drawline.
         """
+        if joinstyle == "miter":
+            #sharp
+            pass
+        elif joinstyle == "round":
+            pass
+        elif joinstyle == "bevel":
+            #flattened
+            pass
         for index in xrange(len(coords)-1):
             start,end = coords[index],coords[index+1]
             linecoords = list(start)
@@ -359,10 +390,10 @@ class Image(object):
             if steep:
                 x,y = y,x
             #not entirely satisfied with quality yet, does some weird stuff when overlapping
-            p = self.get(int(x),int(y))
+            #p = self.get(int(x),int(y))
             newtransp = c*255 #int(col[3]*c)
-            #newcolor = (col[0], col[1], col[2],newtransp)
-            newcolor = (int((p[0]*(1-c)) + col[0]*c), int((p[1]*(1-c)) + col[1]*c), int((p[2]*(1-c)) + col[2]*c))
+            newcolor = (col[0], col[1], col[2], newtransp)
+            #newcolor = (int((p[0]*(1-c)) + col[0]*c), int((p[1]*(1-c)) + col[1]*c), int((p[2]*(1-c)) + col[2]*c))
             self.put(int(x),int(y),newcolor)
 
         def iround(x):
@@ -531,11 +562,12 @@ class Image(object):
                         for x in xrange(fillmin,fillmax+1):
                             self.put(x,y,fillcolor)
         #then draw outline
-        for index in xrange(len(coords)-1):
-            start,end = coords[index],coords[index+1]
-            linecoords = list(start)
-            linecoords.extend(list(end))
-            self.drawline(*linecoords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None)
+        if outlinecolor:
+            for index in xrange(len(coords)-1):
+                start,end = coords[index],coords[index+1]
+                linecoords = list(start)
+                linecoords.extend(list(end))
+                self.drawline(*linecoords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None)
 
     def floodfill(self,x,y,fillcolor,fuzzythresh=1.0):
         """
@@ -696,6 +728,7 @@ if __name__ == "__main__":
     img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
     #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
     img.drawline(22,11,88,77,fillcolor=(222,0,0),fillsize=8)
+    img.drawline(22,66,88,77,fillcolor=(222,0,0,166),fillsize=8)
     #img.drawbezier([(11,11),(90,40),(90,90)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
     #img.drawcircle(90,50,fillsize=5, fillcolor=(0,0,0))
