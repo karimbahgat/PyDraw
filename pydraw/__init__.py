@@ -347,7 +347,7 @@ class Image(object):
                     xtipbuff = buff*2 * math.cos(math.radians(angl))
                     xtipright = x2+xtipbuff
                     ytipright = y2+ytipbuff
-                    roundcurve = _Bezier([leftlinecoords[-2:],(xtipright,ytipright),rightlinecoords[:2]], intervals=100)
+                    roundcurve = _Bezier([leftlinecoords[-2:],(xtipright,ytipright),rightlinecoords[:2]], intervals=buff)
                     def flatten(iterable):
                         return itertools.chain.from_iterable(iterable)
                     linepolygon.extend(list(flatten(roundcurve.coords)))
@@ -356,7 +356,7 @@ class Image(object):
                     #left round tip
                     xtipleft = x1-xtipbuff
                     ytipleft = y1-ytipbuff
-                    roundcurve = _Bezier([rightlinecoords[-2:],(xtipleft,ytipleft),leftlinecoords[:2]], intervals=100)
+                    roundcurve = _Bezier([rightlinecoords[-2:],(xtipleft,ytipleft),leftlinecoords[:2]], intervals=buff)
                     def flatten(iterable):
                         return itertools.chain.from_iterable(iterable)
                     linepolygon.extend(list(flatten(roundcurve.coords)))
@@ -506,6 +506,12 @@ class Image(object):
         #flatten=...
         #flatangle=...
 
+        #alternative circle algorithms
+        #http://stackoverflow.com/questions/1201200/fast-algorithm-for-drawing-filled-circles
+        #http://willperone.net/Code/codecircle.php
+        #http://www.mathopenref.com/coordcirclealgorithm.html
+        
+
         #use bezier circle path
         size = fillsize
         c = 0.55191502449*size #0.55191502449 http://spencermortensen.com/articles/bezier-circle/ #alternative nr: 0.551784 http://www.tinaja.com/glib/ellipse4.pdf
@@ -513,14 +519,16 @@ class Image(object):
                  (size,0),(size,-c),(c,-size),
                  (0,-size),(-c,-size),(-size,-c),
                  (-size,0),(-size,c),(-c,size),(0,size)]
+        circlepolygon = []
         oldindex = 1
         for index in xrange(4):
             cornerpoints = relcontrolpoints[oldindex-1:oldindex+3]
             cornerpoints = [(x+relx,y+rely) for relx,rely in cornerpoints]
-            self.drawbezier(cornerpoints, fillsize=outlinewidth, fillcolor=outlinecolor, outlinecolor=None)
+            #self.drawbezier(cornerpoints, fillsize=outlinewidth, fillcolor=outlinecolor, outlinecolor=None, intervals=int(fillsize*20))
+            circlepolygon.extend(_Bezier(cornerpoints, intervals=int(fillsize*3)).coords)
             oldindex += 3
-        #then fill insides...
-        #...
+        #then draw and fill as polygon
+        self.drawpolygon(circlepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
   
     def drawpolygon(self, coords, fillcolor=None, outlinecolor=(255,255,255), outlinewidth=1):
         """
@@ -575,18 +583,22 @@ class Image(object):
                 if tempcollect:
                     checkedges = tempcollect
                 #find intersect
+                #print checkedges
                 scanline = _Line(xmin,y,xmax,y)
                 for edge in checkedges:
                     edge = _Line(*edge)
                     intersection = scanline.intersect(edge)
+                    #print intersection, scanline.tolist(), edge.tolist()
                     if intersection:
                         ix,iy = intersection
                         fillxs.append(ix)
                 #scan line and fill
                 fillxs = sorted(fillxs)
+                #print y, len(fillxs)#, checkedges
                 if fillxs:
                     for fillmin,fillmax in groupby2(fillxs):
-                        fillmin,fillmax = map(round,map(int,(fillmin,fillmax)))
+                        #print "\t",fillmin,fillmax
+                        fillmin,fillmax = map(int,map(round,(fillmin,fillmax)))
                         for x in xrange(fillmin,fillmax+1):
                             self.put(x,y,fillcolor)
         #then draw outline
@@ -687,26 +699,82 @@ class _Line:
         self.ydiff = y2-y1
         try:
             self.slope = self.ydiff/float(self.xdiff)
+            self.zero_y = self.slope*(0-x1)+y1
         except ZeroDivisionError:
-            self.slope = self.ydiff
-        self.zero_y = self.slope*(0-x1)+y1
+            self.slope = None
+            self.zero_y = None
     def tolist(self):
         return ((self.x1,self.y1),(self.x2,self.y2))
-    def intersect(self, otherline):
+    def intersect(self, otherline, infinite=False):
         """
         Input must be another line instance
-        Finds imaginary intersect assuming lines go forever, regardless of real intersect
-        Based on http://stackoverflow.com/questions/20677795/find-the-point-of-intersecting-lines
+        Finds real or imaginary intersect assuming lines go forever, regardless of real intersect
+        Infinite is based on http://stackoverflow.com/questions/20677795/find-the-point-of-intersecting-lines
+        Real is based on http://stackoverflow.com/questions/18234049/determine-if-two-lines-intersect
         """
-        D  = -self.ydiff * otherline.xdiff - self.xdiff * -otherline.ydiff
-        Dx = self._selfprod() * otherline.xdiff - self.xdiff * otherline._selfprod()
-        Dy = -self.ydiff * otherline._selfprod() - self._selfprod() * -otherline.ydiff
-        if D != 0:
-            x = Dx / D
-            y = Dy / D
-            return x,y
+        if infinite:
+            D  = -self.ydiff * otherline.xdiff - self.xdiff * -otherline.ydiff
+            Dx = self._selfprod() * otherline.xdiff - self.xdiff * otherline._selfprod()
+            Dy = -self.ydiff * otherline._selfprod() - self._selfprod() * -otherline.ydiff
+            if D != 0:
+                x = Dx / D
+                y = Dy / D
+                return x,y
+            else:
+                return False
         else:
-            return False
+##            #adapted from c code, http://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
+##            p0_x,p0_y,p1_x,p1_y = self.x1,self.y1,self.x2,self.y2
+##            p2_x,p2_y,p3_x,p3_y = otherline.x1,otherline.y1,otherline.x2,otherline.y2
+##            s1_x = p1_x - p0_x;     s1_y = p1_y - p0_y
+##            s2_x = p3_x - p2_x;     s2_y = p3_y - p2_y
+##            try:
+##                s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / (-s2_x * s1_y + s1_x * s2_y)
+##            except ZeroDivisionError:
+##                return False
+##            try:
+##                t = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / (-s2_x * s1_y + s1_x * s2_y)
+##            except ZeroDivisionError:
+##                return False
+##            if s >= 0 and s <= 1 and t >= 0 and t <= 1:
+##                i_x = p0_x + (t * s1_x)
+##                i_y = p0_y + (t * s1_y)
+##                return i_x,i_y
+##            else:
+##                return False
+##            #check if intsect point lies on selfline
+##            if (self.x1-ix)*(self.x2-ix) + (self.y1-iy)*(self.y2-iy) < 0:
+##                return ix,iy
+##            #check if intsect point lies on otherline
+##            elif (otherline.x1-ix)*(otherline.x2-ix) + (otherline.y1-iy)*(otherline.y2-iy) < 0:
+##                return ix,iy
+# MANUAL APPROACH
+# http://stackoverflow.com/questions/18234049/determine-if-two-lines-intersect
+            if self.slope == None:
+                if otherline.slope == None:
+                    return False
+                ix = self.x1
+                iy = ix*otherline.slope+otherline.zero_y
+            elif otherline.slope == None:
+                ix = otherline.x1
+                iy = ix*self.slope+self.zero_y
+            else:
+                try:
+                    ix = (otherline.zero_y-self.zero_y) / (self.slope-otherline.slope)
+                except ZeroDivisionError:
+                    #slopes are exactly the same so never intersect
+                    return False
+                iy = ix*self.slope+self.zero_y
+
+            #check that intsec happens within bbox of both lines
+            if ix >= min(self.x1,self.x2) and ix >= min(otherline.x1,otherline.x2)\
+            and ix <= max(self.x1,self.x2) and ix <= max(otherline.x1,otherline.x2)\
+            and iy >= min(self.y1,self.y2) and iy >= min(otherline.y1,otherline.y2)\
+            and iy <= max(self.y1,self.y2) and iy <= max(otherline.y1,otherline.y2):
+                return ix,iy
+            else:
+                return False
+
     #INTERNAL USE ONLY
     def _selfprod(self):
         """
@@ -734,7 +802,7 @@ class _Bezier:
             return result
         n = len(xypoints)
         combinations = pascal_row(n-1)
-        ts = (t/100.0 for t in xrange(intervals+1))
+        ts = (t/float(intervals) for t in xrange(intervals+1))
         # This uses the generalized formula for bezier curves
         # http://en.wikipedia.org/wiki/B%C3%A9zier_curve#Generalization
         result = []
@@ -749,13 +817,14 @@ class _Bezier:
 
 if __name__ == "__main__":
     img = Image().new(100,100)
+    img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
     img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
     #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
     img.drawline(22,11,88,77,fillcolor=(222,0,0),fillsize=8, capstyle="round")
     img.drawline(22,66,88,77,fillcolor=(222,0,0,166),fillsize=11, capstyle="round")
-    img.drawline(44,33,55,80,fillcolor=(222,0,0),fillsize=0.5)
+    ##img.drawline(44,33,55,80,fillcolor=(222,0,0),fillsize=0.5)
     #img.drawbezier([(11,11),(90,40),(90,90)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
-    #img.drawcircle(90,50,fillsize=5, fillcolor=(0,0,0), outlinecolor=(0,0,222))
+    img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
     img.view()
     img.save("C:/Users/BIGKIMO/Desktop/hmm.gif")
