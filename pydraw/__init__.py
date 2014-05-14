@@ -301,9 +301,9 @@ class Image(object):
 ##        - bendanchor is the float ratio to offset the bend from its default anchor point at the center of the line.
         
         #decide to draw single or thick line with outline
-        if fillsize == 1:
+        if fillsize <= 1:
             #draw single line
-            self._drawsimpleline(x1, y1, x2, y2, col=fillcolor)
+            self._drawsimpleline(x1, y1, x2, y2, col=fillcolor, thick=fillsize)
         else:
             if outlinecolor or fillcolor:
                 linepolygon = []
@@ -334,26 +334,51 @@ class Image(object):
                 if capstyle == "butt":
                     linepolygon.extend(leftlinecoords)
                     linepolygon.extend(rightlinecoords)
-                    linepolygon = map(round, linepolygon)
-                    linepolygon = map(int, linepolygon)
                     def groupby2(iterable):
                         args = [iter(iterable)] * 2
                         return itertools.izip(*args)
                     linepolygon = list(groupby2(linepolygon))
-                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor)
+                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
                 elif capstyle == "round":
+                    #left side
                     linepolygon.extend(leftlinecoords)
-                    linepolygon.extend(_Bezier([leftlinecoords[-1],(90,50),rightlinecoords[0]],10).coords)
+                    #right round tip
+                    ytipbuff = buff*2 * math.sin(math.radians(angl))
+                    xtipbuff = buff*2 * math.cos(math.radians(angl))
+                    xtipright = x2+xtipbuff
+                    ytipright = y2+ytipbuff
+                    roundcurve = _Bezier([leftlinecoords[-2:],(xtipright,ytipright),rightlinecoords[:2]], intervals=100)
+                    def flatten(iterable):
+                        return itertools.chain.from_iterable(iterable)
+                    linepolygon.extend(list(flatten(roundcurve.coords)))
+                    #right side
                     linepolygon.extend(rightlinecoords)
-                    linepolygon = map(round, linepolygon)
-                    linepolygon = map(int, linepolygon)
+                    #left round tip
+                    xtipleft = x1-xtipbuff
+                    ytipleft = y1-ytipbuff
+                    roundcurve = _Bezier([rightlinecoords[-2:],(xtipleft,ytipleft),leftlinecoords[:2]], intervals=100)
+                    def flatten(iterable):
+                        return itertools.chain.from_iterable(iterable)
+                    linepolygon.extend(list(flatten(roundcurve.coords)))
+                    #draw as polygon
                     def groupby2(iterable):
                         args = [iter(iterable)] * 2
                         return itertools.izip(*args)
                     linepolygon = list(groupby2(linepolygon))
-                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor)
+                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
                 elif capstyle == "projecting":
-                    pass
+                    #left side
+                    ytipbuff = buff * math.sin(math.radians(angl))
+                    xtipbuff = buff * math.cos(math.radians(angl))
+                    linepolygon.extend([leftx2+xtipbuff, lefty2+ytipbuff, leftx1+xtipbuff, lefty1+ytipbuff])
+                    #right side
+                    linepolygon.extend([rightx1+xtipbuff, righty1+ytipbuff, rightx2+xtipbuff, righty2+ytipbuff])
+                    #draw as polygon
+                    def groupby2(iterable):
+                        args = [iter(iterable)] * 2
+                        return itertools.izip(*args)
+                    linepolygon = list(groupby2(linepolygon))
+                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
 
     def drawmultiline(self, coords, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, outlinewidth=1, joinstyle="miter"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
@@ -378,7 +403,7 @@ class Image(object):
             linecoords.extend(list(end))
             self.drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
         
-    def _drawsimpleline(self, x1, y1, x2, y2, col):
+    def _drawsimpleline(self, x1, y1, x2, y2, col, thick):
         """
         backend being used internally, holds the basic line algorithm, including antialiasing.
         taken and modified from a Stackoverflow post...
@@ -391,7 +416,7 @@ class Image(object):
                 x,y = y,x
             #not entirely satisfied with quality yet, does some weird stuff when overlapping
             #p = self.get(int(x),int(y))
-            newtransp = c*255 #int(col[3]*c)
+            newtransp = c*255*thick #int(col[3]*c)
             newcolor = (col[0], col[1], col[2], newtransp)
             #newcolor = (int((p[0]*(1-c)) + col[0]*c), int((p[1]*(1-c)) + col[1]*c), int((p[2]*(1-c)) + col[2]*c))
             self.put(int(x),int(y),newcolor)
@@ -419,7 +444,10 @@ class Image(object):
         if x2 < x1:
             x1,x2=x2,x1
             y1,y2=y2,y1
-        gradient = float(dy) / float(dx)
+        try:
+            gradient = float(dy) / float(dx)
+        except ZeroDivisionError:
+            gradient = float(dy)
 
         #handle first endpoint
         xend = round(x1)
@@ -558,16 +586,12 @@ class Image(object):
                 fillxs = sorted(fillxs)
                 if fillxs:
                     for fillmin,fillmax in groupby2(fillxs):
-                        fillmin,fillmax = map(int,(fillmin,fillmax))
+                        fillmin,fillmax = map(round,map(int,(fillmin,fillmax)))
                         for x in xrange(fillmin,fillmax+1):
                             self.put(x,y,fillcolor)
         #then draw outline
         if outlinecolor:
-            for index in xrange(len(coords)-1):
-                start,end = coords[index],coords[index+1]
-                linecoords = list(start)
-                linecoords.extend(list(end))
-                self.drawline(*linecoords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None)
+            self.drawmultiline(coords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None)
 
     def floodfill(self,x,y,fillcolor,fuzzythresh=1.0):
         """
@@ -690,7 +714,7 @@ class _Line:
         """
         return -(self.x1*self.y2 - self.x2*self.y1)
 class _Bezier:
-    def __init__(self, xypoints, intervals):
+    def __init__(self, xypoints, intervals=100):
         # xys should be a sequence of 2-tuples (Bezier control points)
         def pascal_row(n):
             # This returns the nth row of Pascal's Triangle
@@ -727,10 +751,11 @@ if __name__ == "__main__":
     img = Image().new(100,100)
     img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
     #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
-    img.drawline(22,11,88,77,fillcolor=(222,0,0),fillsize=8)
-    img.drawline(22,66,88,77,fillcolor=(222,0,0,166),fillsize=8)
+    img.drawline(22,11,88,77,fillcolor=(222,0,0),fillsize=8, capstyle="round")
+    img.drawline(22,66,88,77,fillcolor=(222,0,0,166),fillsize=11, capstyle="round")
+    img.drawline(44,33,55,80,fillcolor=(222,0,0),fillsize=0.5)
     #img.drawbezier([(11,11),(90,40),(90,90)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
-    #img.drawcircle(90,50,fillsize=5, fillcolor=(0,0,0))
+    #img.drawcircle(90,50,fillsize=5, fillcolor=(0,0,0), outlinecolor=(0,0,222))
     img.view()
     img.save("C:/Users/BIGKIMO/Desktop/hmm.gif")
