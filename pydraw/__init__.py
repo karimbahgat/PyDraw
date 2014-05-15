@@ -271,16 +271,55 @@ class Image(object):
         | color | RGB color tuple to set to the pixel
 
         """
-        if len(color)==3:
+        #if floating xy coords, make into semitransparent colors
+        if isinstance(x, float) or isinstance(y, float):
+            #calc values
+            xint,yint = int(x), int(y)
+            xfloat,yfloat = x-xint, y-yint
+            if xfloat:
+                x1,x2 = xint,xint+1
+                x1transp,x2transp = 1-xfloat,xfloat
+            if yfloat:
+                y1,y2 = yint,yint+1
+                y1transp,y2transp = 1-yfloat,yfloat
+            #allow transp color
+            if len(color)==3:
+                r,g,b = color
+                color = (r,g,b,255)
+            #disperse pixels
+            if xfloat and yfloat:
+                newcolor = (color[0],color[1],color[2],color[3]*x1transp*y1transp)
+                self.put(x1,y1,newcolor)
+                newcolor = (color[0],color[1],color[2],color[3]*x1transp*y2transp)
+                self.put(x1,y2,newcolor)
+                newcolor = (color[0],color[1],color[2],color[3]*x2transp*y1transp)
+                self.put(x2,y1,newcolor)
+                newcolor = (color[0],color[1],color[2],color[3]*x2transp*y2transp)
+                self.put(x2,y2,newcolor)
+            elif xfloat:
+                newcolor = (color[0],color[1],color[2],color[3]*x1transp)
+                self.put(x1,yint,newcolor)
+                newcolor = (color[0],color[1],color[2],color[3]*x2transp)
+                self.put(x2,yint,newcolor)
+            elif yfloat:
+                newcolor = (color[0],color[1],color[2],color[3]*y1transp)
+                self.put(xint,y1,newcolor)
+                newcolor = (color[0],color[1],color[2],color[3]*y2transp)
+                self.put(xint,y2,newcolor)
+            return
+        #or plot normal whole pixels
+        elif len(color)==3:
             #solid color
-            self.imagegrid[y][x] = color
+            pass
         elif len(color)==4:
             #transparent color, blend with background
             t = color[3]/255.0
             p = self.get(int(x),int(y))
-            col = color
-            newcolor = (int((p[0]*(1-t)) + col[0]*t), int((p[1]*(1-t)) + col[1]*t), int((p[2]*(1-t)) + col[2]*t))
-            self.imagegrid[y][x] = newcolor
+            color = (int((p[0]*(1-t)) + color[0]*t), int((p[1]*(1-t)) + color[1]*t), int((p[2]*(1-t)) + color[2]*t))
+        #finally draw it
+        try: self.imagegrid[y][x] = color
+        except IndexError:
+            pass #pixel outside img boundary
         
     def drawline(self, x1, y1, x2, y2, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
@@ -662,10 +701,15 @@ class Image(object):
         window = tk.Tk()
         canvas = tk.Canvas(window, width=self.width, height=self.height)
         canvas.create_text((self.width/2, self.height/2), text="error\nviewing\nimage")
-        tkimg = self._tkimage()
-        canvas.create_image((self.width/2, self.height/2), image=tkimg, state="normal")
+        self.tkimg = self._tkimage()
+        canvas.create_image((self.width/2, self.height/2), image=self.tkimg, state="normal")
         canvas.pack()
         tk.mainloop()
+    def updateview(self):
+        """
+        Updates the image in the Tkinter window to include recent changes to the image
+        """
+        self.tkimg = self._tkimage()
     def save(self, savepath):
         """
         Saves the image to the given filepath.
@@ -774,13 +818,13 @@ class _Line:
                 return ix,iy
             else:
                 return False
-
     #INTERNAL USE ONLY
     def _selfprod(self):
         """
         Used by the line intersect method
         """
         return -(self.x1*self.y2 - self.x2*self.y1)
+    
 class _Bezier:
     def __init__(self, xypoints, intervals=100):
         # xys should be a sequence of 2-tuples (Bezier control points)
@@ -817,6 +861,9 @@ class _Bezier:
 
 if __name__ == "__main__":
     img = Image().new(100,100)
+    img.put(94.7,94.7,(0,0,222))
+    #img.put(95.7,98,(0,0,222))
+    #img.put(98,95.7,(0,0,222))
     img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
     img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
     #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
