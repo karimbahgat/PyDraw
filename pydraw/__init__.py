@@ -320,7 +320,13 @@ class Image(object):
         try: self.imagegrid[y][x] = color
         except IndexError:
             pass #pixel outside img boundary
-        
+
+    def putdata(self, x, y, data, anchor="nw"):
+        """
+        Pastes another image grid of pixels onto the image at the specified position
+        """
+        pass
+
     def drawline(self, x1, y1, x2, y2, fillcolor=None, outlinecolor=(0,0,0), fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
         Draws a single line.
@@ -425,16 +431,28 @@ class Image(object):
         | coords | list of coordinate point pairs to be connected by lines
         | **other | also accepts various color and size arguments, see the docstring for drawline.
         """
-        buff = fillsize/2.0
-        def threewise(iterable):
-            a,_ = itertools.tee(iterable)
-            b,c = itertools.tee(_)
-            next(b, None)
-            next(c, None)
-            next(c, None)
-            return itertools.izip(a,b,c)
-        if joinstyle == "miter":
-            #sharp
+        if fillsize <= 1:
+            for index in xrange(len(coords)-1):
+                start,end = coords[index],coords[index+1]
+                linecoords = list(start)
+                linecoords.extend(list(end))
+                self.drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
+        elif joinstyle == None:
+            for index in xrange(len(coords)-1):
+                start,end = coords[index],coords[index+1]
+                linecoords = list(start)
+                linecoords.extend(list(end))
+                self.drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
+        else:
+            #lines are thick so they have to be joined
+            buff = fillsize/2.0
+            def threewise(iterable):
+                a,_ = itertools.tee(iterable)
+                b,c = itertools.tee(_)
+                next(b, None)
+                next(c, None)
+                next(c, None)
+                return itertools.izip(a,b,c)
             linepolygon_left = []
             linepolygon_right = []
             buffersize = fillsize/2.0
@@ -448,17 +466,37 @@ class Image(object):
             linepolygon_left.append(leftlinestart)
             linepolygon_right.append(rightlinestart)
             #then all mid areas
-            for start,mid,end in threewise(coords):
-                (x1,y1),(x2,y2),(x3,y3) = start,mid,end
-                line1 = _Line(x1,y1,x2,y2)
-                line2 = _Line(x2,y2,x3,y3)
-                line1_left,line1_right = line1.getbuffersides(linebuffer=buffersize)
-                line2_left,line2_right = line2.getbuffersides(linebuffer=buffersize)
-                midleft = line1_left.intersect(line2_left, infinite=True)
-                midright = line1_right.intersect(line2_right, infinite=True)
-                #add coords
-                linepolygon_left.append(midleft)
-                linepolygon_right.append(midright)
+            if joinstyle == "miter":
+                #sharp join style
+                for start,mid,end in threewise(coords):
+                    (x1,y1),(x2,y2),(x3,y3) = start,mid,end
+                    line1 = _Line(x1,y1,x2,y2)
+                    line2 = _Line(x2,y2,x3,y3)
+                    line1_left,line1_right = line1.getbuffersides(linebuffer=buffersize)
+                    line2_left,line2_right = line2.getbuffersides(linebuffer=buffersize)
+                    midleft = line1_left.intersect(line2_left, infinite=True)
+                    midright = line1_right.intersect(line2_right, infinite=True)
+                    #add coords
+                    linepolygon_left.append(midleft)
+                    linepolygon_right.append(midright)
+            elif joinstyle == "round":
+                #round
+                for start,mid,end in threewise(coords):
+                    (x1,y1),(x2,y2),(x3,y3) = start,mid,end
+                    line1 = _Line(x1,y1,x2,y2)
+                    line2 = _Line(x2,y2,x3,y3)
+                    line1_left,line1_right = line1.getbuffersides(linebuffer=buffersize)
+                    line2_left,line2_right = line2.getbuffersides(linebuffer=buffersize)
+                    midleft = line1_left.intersect(line2_left, infinite=True)
+                    midright = line1_right.intersect(line2_right, infinite=True)
+                    leftcurve = _Bezier([line1_left.tolist()[1],midleft,line2_left.tolist()[0]], intervals=20).coords
+                    rightcurve = _Bezier([line1_right.tolist()[1],midright,line2_right.tolist()[0]], intervals=20).coords
+                    #add coords
+                    linepolygon_left.extend(leftcurve)
+                    linepolygon_right.extend(rightcurve)
+            elif joinstyle == "bevel":
+                #flattened
+                pass
             #finally add last line coords
             (x1,y1),(x2,y2) = coords[-2:]
             lastline = _Line(x1,y1,x2,y2)
@@ -472,17 +510,6 @@ class Image(object):
             linepolygon.extend(linepolygon_left)
             linepolygon.extend(list(reversed(linepolygon_right)))
             self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
-        elif joinstyle == "round":
-            pass
-        elif joinstyle == "bevel":
-            #flattened
-            pass
-        elif joinstyle == None:
-            for index in xrange(len(coords)-1):
-                start,end = coords[index],coords[index+1]
-                linecoords = list(start)
-                linecoords.extend(list(end))
-                self.drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
         
     def _drawsimpleline(self, x1, y1, x2, y2, col, thick):
         """
@@ -588,9 +615,9 @@ class Image(object):
         #flatangle=...
 
         #alternative circle algorithms
-        #http://stackoverflow.com/questions/1201200/fast-algorithm-for-drawing-filled-circles
-        #http://willperone.net/Code/codecircle.php
-        #http://www.mathopenref.com/coordcirclealgorithm.html
+            #http://stackoverflow.com/questions/1201200/fast-algorithm-for-drawing-filled-circles
+            #http://willperone.net/Code/codecircle.php
+            #http://www.mathopenref.com/coordcirclealgorithm.html
         
         #use bezier circle path
         size = fillsize
@@ -610,7 +637,7 @@ class Image(object):
         #then draw and fill as polygon
         self.drawpolygon(circlepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
   
-    def drawpolygon(self, coords, fillcolor=None, outlinecolor=(255,255,255), outlinewidth=1):
+    def drawpolygon(self, coords, fillcolor=None, outlinecolor=(255,255,255), outlinewidth=1, outlinejoinstyle="miter"):
         """
         Draws a polygon based on input coordinates.
         Note: as with other primitives, fillcolor does not work properly.
@@ -683,7 +710,7 @@ class Image(object):
                             self.put(x,y,fillcolor)
         #then draw outline
         if outlinecolor:
-            self.drawmultiline(coords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None)
+            self.drawmultiline(coords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None, joinstyle=outlinejoinstyle)
 
     def floodfill(self,x,y,fillcolor,fuzzythresh=1.0):
         """
@@ -934,19 +961,30 @@ class _Bezier:
         self.coords = result
 
 
+
 if __name__ == "__main__":
     img = Image().new(100,100)
+
+    #SINGLE PIXEL TEST
     img.put(94.7,94.7,(0,0,222))
     #img.put(95.7,98,(0,0,222))
     #img.put(98,95.7,(0,0,222))
-    img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
-    img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0),outlinewidth=4)
+
+    #GREEN POLYGONS WITH OUTLINE
+    #img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=8, outlinejoinstyle="round")
+    img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=5, outlinejoinstyle="round")
+
+    #MISC MULTILINE TEST
     #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,0,0), fillsize=8, outlinecolor=None, joinstyle="miter")
     ###img.drawmultiline(coords=[(10,50),(50,50),(50,90)], fillcolor=(0,0,0), fillsize=8, outlinecolor=None, joinstyle=None)
     ###img.drawmultiline(coords=[(10,50),(50,50),(90,55)], fillcolor=(0,111,0), fillsize=8, outlinecolor=None, joinstyle="miter")
+
+    #SINGLE LINE TEST
     #img.drawline(22,11,88,77,fillcolor=(222,0,0),fillsize=8, capstyle="round")
     #img.drawline(22,66,88,77,fillcolor=(222,0,0,166),fillsize=11, capstyle="round")
     ##img.drawline(44,33,55,80,fillcolor=(222,0,0),fillsize=0.5)
+
+    #VARIOUS OTHER SHAPES
     #img.drawbezier([(11,11),(90,40),(90,90)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
     #img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
