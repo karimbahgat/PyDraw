@@ -437,104 +437,40 @@ class Image(object):
             #sharp
             linepolygon_left = []
             linepolygon_right = []
+            buffersize = fillsize/2.0
             #the first line
             (x1,y1),(x2,y2),(x3,y3) = coords[:3]
             line1 = _Line(x1,y1,x2,y2)
             line2 = _Line(x2,y2,x3,y3)
-            angl1 = line1.getangle()
-            perpangl_rad = math.radians(angl1-90) #perpendicular angle in radians
-            xbuff = buff * math.cos(perpangl_rad)
-            ybuff = buff * math.sin(perpangl_rad)
-            bwangl = line1.anglebetween_rel(line2)
-            if bwangl >= 0:
-                #leftline
-                leftx1 = (x1+xbuff)
-                lefty1 = (y1+ybuff)
-                leftlinecoords = (leftx1,lefty1)
-                #rightline
-                rightx1 = (x1-xbuff)
-                righty1 = (y1-ybuff)
-                rightlinecoords = (rightx1,righty1)
-            else:
-                #leftline
-                leftx1 = (x1-xbuff)
-                lefty1 = (y1-ybuff)
-                leftlinecoords = (leftx1,lefty1)
-                #rightline
-                rightx1 = (x1+xbuff)
-                righty1 = (y1+ybuff)
-                rightlinecoords = (rightx1,righty1)
-            linepolygon_left.append(leftlinecoords)
-            linepolygon_right.append(rightlinecoords)
-
+            leftline,rightline = line1.getbuffersides(linebuffer=buffersize)
+            leftlinestart = leftline.tolist()[0]
+            rightlinestart = rightline.tolist()[0]
+            linepolygon_left.append(leftlinestart)
+            linepolygon_right.append(rightlinestart)
             #then all mid areas
             for start,mid,end in threewise(coords):
                 (x1,y1),(x2,y2),(x3,y3) = start,mid,end
                 line1 = _Line(x1,y1,x2,y2)
                 line2 = _Line(x2,y2,x3,y3)
-                
-                #get angles
-                normangl = line1.anglebetween_inv(line2)
-                
-                #calc middle
-                angl_midnorm_rad = math.radians(normangl)
-                xbuff_mid = fillsize * math.cos(angl_midnorm_rad)
-                ybuff_mid = fillsize * math.sin(angl_midnorm_rad)
-                print xbuff_mid,ybuff_mid
-                midleftx,midlefty = (x2-xbuff_mid, y2+ybuff_mid)
-                midrightx,midrighty = (x2+xbuff_mid, y2-ybuff_mid)
-                bwangl = line1.anglebetween_rel(line2)
-                if bwangl < 0:
-                    midleftx,midlefty,midrightx,midrighty = midrightx,midrighty,midleftx,midlefty
-                leftlinecoords = (midleftx,midlefty)
-                rightlinecoords = (midrightx,midrighty)
-                print midleftx,midlefty,midrightx,midrighty
-                
-                "remove later"
-                self.put(midleftx,midlefty,(0,0,222))
-                self.put(midrightx,midrighty,(0,0,222))
-
+                line1_left,line1_right = line1.getbuffersides(linebuffer=buffersize)
+                line2_left,line2_right = line2.getbuffersides(linebuffer=buffersize)
+                midleft = line1_left.intersect(line2_left, infinite=True)
+                midright = line1_right.intersect(line2_right, infinite=True)
                 #add coords
-                linepolygon_left.append(leftlinecoords)
-                linepolygon_right.append(rightlinecoords)
-                
+                linepolygon_left.append(midleft)
+                linepolygon_right.append(midright)
             #finally add last line coords
-            print "last",coords[-3:]
-            (x1,y1),(x2,y2),(x3,y3) = coords[-3:]
-            line1 = _Line(x1,y1,x2,y2)
-            line2 = _Line(x2,y2,x3,y3)
-            angl2 = line2.getangle()
-            perpangl_rad = math.radians(angl2) #perpendicular angle in radians
-            xbuff = buff * math.cos(perpangl_rad)
-            ybuff = buff * math.sin(perpangl_rad)
-            bwangl = line1.anglebetween_rel(line2)
-            if bwangl < 0:
-                #leftline
-                leftx1 = (x3+xbuff)
-                lefty1 = (y3+ybuff)
-                leftlinecoords = (leftx1,lefty1)
-                #rightline
-                rightx1 = (x3-xbuff)
-                righty1 = (y3-ybuff)
-                rightlinecoords = (rightx1,righty1)
-            else:
-                #leftline
-                leftx1 = (x3-xbuff)
-                lefty1 = (y3-ybuff)
-                leftlinecoords = (leftx1,lefty1)
-                #rightline
-                rightx1 = (x3+xbuff)
-                righty1 = (y3+ybuff)
-                rightlinecoords = (rightx1,righty1)
-            linepolygon_left.append(leftlinecoords)
-            linepolygon_right.append(rightlinecoords)
+            (x1,y1),(x2,y2) = coords[-2:]
+            lastline = _Line(x1,y1,x2,y2)
+            leftline,rightline = lastline.getbuffersides(linebuffer=buffersize)
+            leftlinestart = leftline.tolist()[1]
+            rightlinestart = rightline.tolist()[1]
+            linepolygon_left.append(leftlinestart)
+            linepolygon_right.append(rightlinestart)
             #draw as polygon
             linepolygon = []
             linepolygon.extend(linepolygon_left)
             linepolygon.extend(list(reversed(linepolygon_right)))
-            print ""
-            for point in linepolygon:
-                print point
             self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
         elif joinstyle == "round":
             pass
@@ -852,6 +788,8 @@ class _Line:
         except ZeroDivisionError:
             self.slope = None
             self.zero_y = None
+    def __str__(self):
+        return str(self.tolist())
     def tolist(self):
         return ((self.x1,self.y1),(self.x2,self.y2))
     def intersect(self, otherline, infinite=False):
@@ -872,33 +810,8 @@ class _Line:
             else:
                 return False
         else:
-##            #adapted from c code, http://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
-##            p0_x,p0_y,p1_x,p1_y = self.x1,self.y1,self.x2,self.y2
-##            p2_x,p2_y,p3_x,p3_y = otherline.x1,otherline.y1,otherline.x2,otherline.y2
-##            s1_x = p1_x - p0_x;     s1_y = p1_y - p0_y
-##            s2_x = p3_x - p2_x;     s2_y = p3_y - p2_y
-##            try:
-##                s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / (-s2_x * s1_y + s1_x * s2_y)
-##            except ZeroDivisionError:
-##                return False
-##            try:
-##                t = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / (-s2_x * s1_y + s1_x * s2_y)
-##            except ZeroDivisionError:
-##                return False
-##            if s >= 0 and s <= 1 and t >= 0 and t <= 1:
-##                i_x = p0_x + (t * s1_x)
-##                i_y = p0_y + (t * s1_y)
-##                return i_x,i_y
-##            else:
-##                return False
-##            #check if intsect point lies on selfline
-##            if (self.x1-ix)*(self.x2-ix) + (self.y1-iy)*(self.y2-iy) < 0:
-##                return ix,iy
-##            #check if intsect point lies on otherline
-##            elif (otherline.x1-ix)*(otherline.x2-ix) + (otherline.y1-iy)*(otherline.y2-iy) < 0:
-##                return ix,iy
-# MANUAL APPROACH
-# http://stackoverflow.com/questions/18234049/determine-if-two-lines-intersect
+            # MANUAL APPROACH
+            # http://stackoverflow.com/questions/18234049/determine-if-two-lines-intersect
             if self.slope == None:
                 if otherline.slope == None:
                     return False
@@ -940,6 +853,27 @@ class _Line:
             else:
                 raise TypeError("error: the vector isnt moving anywhere, so has no angle")
         return angle
+    def getbuffersides(self, linebuffer):
+        x1,y1,x2,y2 = self.x1,self.y1,self.x2,self.y2
+        midline = _Line(x1,y1,x2,y2)
+        angl = midline.getangle()
+        perpangl_rad = math.radians(angl-90) #perpendicular angle in radians
+        xbuff = linebuffer * math.cos(perpangl_rad)
+        ybuff = linebuffer * math.sin(perpangl_rad)
+        #xs
+        leftx1 = (x1-xbuff)
+        leftx2 = (x2-xbuff)
+        rightx1 = (x1+xbuff)
+        rightx2 = (x2+xbuff)
+        #ys
+        lefty1 = (y1+ybuff)
+        lefty2 = (y2+ybuff)
+        righty1 = (y1-ybuff)
+        righty2 = (y2-ybuff)
+        #return lines
+        leftline = _Line(leftx1,lefty1,leftx2,lefty2)
+        rightline = _Line(rightx1,righty1,rightx2,righty2)
+        return leftline,rightline
     def anglebetween_rel(self, otherline):
         angl1 = self.getangle()
         angl2 = otherline.getangle()
@@ -1005,11 +939,11 @@ if __name__ == "__main__":
     img.put(94.7,94.7,(0,0,222))
     #img.put(95.7,98,(0,0,222))
     #img.put(98,95.7,(0,0,222))
-    #img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
-    #img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
+    img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0))
+    img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0),outlinewidth=4)
     #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,0,0), fillsize=8, outlinecolor=None, joinstyle="miter")
-    img.drawmultiline(coords=[(10,50),(50,50),(90,10)], fillcolor=(0,0,0), fillsize=8, outlinecolor=None, joinstyle=None)
-    img.drawmultiline(coords=[(10,50),(50,50),(90,10)], fillcolor=(0,111,0), fillsize=8, outlinecolor=None, joinstyle="miter")
+    ###img.drawmultiline(coords=[(10,50),(50,50),(50,90)], fillcolor=(0,0,0), fillsize=8, outlinecolor=None, joinstyle=None)
+    ###img.drawmultiline(coords=[(10,50),(50,50),(90,55)], fillcolor=(0,111,0), fillsize=8, outlinecolor=None, joinstyle="miter")
     #img.drawline(22,11,88,77,fillcolor=(222,0,0),fillsize=8, capstyle="round")
     #img.drawline(22,66,88,77,fillcolor=(222,0,0,166),fillsize=11, capstyle="round")
     ##img.drawline(44,33,55,80,fillcolor=(222,0,0),fillsize=0.5)
