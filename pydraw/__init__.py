@@ -93,6 +93,8 @@ I welcome any efforts to contribute code, particularly for:
 
 import sys,os,math,operator,itertools
 
+import png
+
 
 #PYTHON VERSION CHECKING
 PYTHON3 = int(sys.version[0]) == 3
@@ -321,9 +323,9 @@ class Image(object):
         except IndexError:
             pass #pixel outside img boundary
 
-    def putdata(self, x, y, data, anchor="nw"):
+    def pastedata(self, x, y, data, anchor="nw"):
         """
-        Pastes another image grid of pixels onto the image at the specified position
+        Pastes a list of lists of pixels onto the image at the specified position
         """
         pass
 
@@ -477,6 +479,10 @@ class Image(object):
                     midleft = line1_left.intersect(line2_left, infinite=True)
                     midright = line1_right.intersect(line2_right, infinite=True)
                     #add coords
+                    linepolygon = []
+                    linepolygon.extend([linepolygon_left[-1],midleft])
+                    linepolygon.extend([midright,linepolygon_right[-1]])
+                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
                     linepolygon_left.append(midleft)
                     linepolygon_right.append(midright)
             elif joinstyle == "round":
@@ -492,6 +498,12 @@ class Image(object):
                     leftcurve = _Bezier([line1_left.tolist()[1],midleft,line2_left.tolist()[0]], intervals=20).coords
                     rightcurve = _Bezier([line1_right.tolist()[1],midright,line2_right.tolist()[0]], intervals=20).coords
                     #add coords
+                    linepolygon = []
+                    linepolygon.append(linepolygon_left[-1])
+                    linepolygon.extend(leftcurve)
+                    linepolygon.extend(list(reversed(rightcurve)))
+                    linepolygon.append(linepolygon_right[-1])
+                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
                     linepolygon_left.extend(leftcurve)
                     linepolygon_right.extend(rightcurve)
             elif joinstyle == "bevel":
@@ -503,13 +515,19 @@ class Image(object):
             leftline,rightline = lastline.getbuffersides(linebuffer=buffersize)
             leftlinestart = leftline.tolist()[1]
             rightlinestart = rightline.tolist()[1]
-            linepolygon_left.append(leftlinestart)
-            linepolygon_right.append(rightlinestart)
-            #draw as polygon
+            
             linepolygon = []
-            linepolygon.extend(linepolygon_left)
-            linepolygon.extend(list(reversed(linepolygon_right)))
+            linepolygon.extend([linepolygon_left[-1],leftlinestart])
+            linepolygon.extend([rightlinestart,linepolygon_right[-1]])
             self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+            ##linepolygon_left.append(leftlinestart)
+            ##linepolygon_right.append(rightlinestart)
+            
+            #draw as polygon
+            ##linepolygon = []
+            ##linepolygon.extend(linepolygon_left)
+            ##linepolygon.extend(list(reversed(linepolygon_right)))
+            #self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
         
     def _drawsimpleline(self, x1, y1, x2, y2, col, thick):
         """
@@ -676,6 +694,7 @@ class Image(object):
             xmin,ymin,xmax,ymax = bbox
             for y in xrange(ymin,ymax+1):
                 fillxs = []
+                fillxs_half = []
                 #collect relevant edges
                 "first from previous old ones"
                 tempcollect = [tempedge for tempedge in checkedges if tempedge[3] > y]
@@ -690,24 +709,54 @@ class Image(object):
                 if tempcollect:
                     checkedges = tempcollect
                 #find intersect
-                #print checkedges
                 scanline = _Line(xmin,y,xmax,y)
                 for edge in checkedges:
                     edge = _Line(*edge)
                     intersection = scanline.intersect(edge)
-                    #print intersection, scanline.tolist(), edge.tolist()
                     if intersection:
                         ix,iy = intersection
                         fillxs.append(ix)
+##                        if edge.slope:
+##                            ix_below = ix + 1/float(edge.slope)
+##                            if edge.slope < 0:
+##                                fillxs.append(ix)
+##                            else:
+##                                fillxs.append(ix_below)
+##                            halfx = (ix,ix_below)
+##                            if halfx[1]-halfx[0] > 1.5 or halfx[0]-halfx[1] > 1.5:
+##                                #only do antialias fill if fillspan will be 2 pixels or more
+##                                fillxs_half.append(halfx)
+##                        else:
+##                            fillxs.append(ix)
                 #scan line and fill
                 fillxs = sorted(fillxs)
-                #print y, len(fillxs)#, checkedges
                 if fillxs:
                     for fillmin,fillmax in groupby2(fillxs):
-                        #print "\t",fillmin,fillmax
                         fillmin,fillmax = map(int,map(round,(fillmin,fillmax)))
                         for x in xrange(fillmin,fillmax+1):
                             self.put(x,y,fillcolor)
+##                if fillxs_half:
+##                    r,g,b = fillcolor[:3]
+##                    downflag = True
+##                    for fillmin,fillmax in fillxs_half:
+##                        if fillmin > fillmax:
+##                            fillmin,fillmax = fillmax,fillmin
+##                            downflag = False
+##                        fillmin,fillmax = map(int,map(round,(fillmin,fillmax)))
+##                        gradlength = fillmax-fillmin
+##                        incr = 255/float(gradlength)
+##                        gradtransp = 0
+##                        for x in xrange(fillmin,fillmax+1):
+##                            gradcolor = (r,g,b,gradtransp)
+##                            self.put(x,y,gradcolor)
+##                            gradcolor_inv = (r,g,b,255-gradtransp)
+##                            if downflag:
+##                                self.put(x,y-1,gradcolor_inv)
+##                            else:
+##                                self.put(x,y+1,gradcolor_inv)
+##                            gradtransp += incr
+            #cheating to draw antialiased edges as lines
+            self.drawmultiline(coords, fillcolor=fillcolor, outlinecolor=None, fillsize=1)
         #then draw outline
         if outlinecolor:
             self.drawmultiline(coords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None, joinstyle=outlinejoinstyle)
@@ -787,10 +836,14 @@ class Image(object):
         | filepath | the string path location to save the image. Extension must be given and can only be ".gif".
         
         """
-        tempwin = tk.Tk() #only so dont get "too early to create image" error
-        tkimg = self._tkimage()
-        tkimg.write(savepath, "gif")
-        tempwin.destroy()
+        if savepath.endswith(".png"):
+            imagerows = [list(itertools.chain.from_iterable(row)) for row in self.imagegrid]
+            png.from_array(imagerows, mode="RGB").save(savepath)
+        elif savepath.endswith(".gif"):
+            tempwin = tk.Tk() #only so dont get "too early to create image" error
+            tkimg = self._tkimage()
+            tkimg.write(savepath, "gif")
+            tempwin.destroy()
         
     #INTERNAL USE ONLY
     def _tkimage(self):
@@ -963,7 +1016,7 @@ class _Bezier:
 
 
 if __name__ == "__main__":
-    img = Image().new(100,100)
+    img = Image().new(100,100, background=(222,0,0))
 
     #SINGLE PIXEL TEST
     img.put(94.7,94.7,(0,0,222))
@@ -971,13 +1024,13 @@ if __name__ == "__main__":
     #img.put(98,95.7,(0,0,222))
 
     #GREEN POLYGONS WITH OUTLINE
-    #img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=8, outlinejoinstyle="round")
-    img.drawpolygon(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=5, outlinejoinstyle="round")
+    #img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=12, outlinejoinstyle="round")
+    img.drawpolygon(coords=[(90,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=5, outlinejoinstyle="round")
 
     #MISC MULTILINE TEST
     #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,0,0), fillsize=8, outlinecolor=None, joinstyle="miter")
     ###img.drawmultiline(coords=[(10,50),(50,50),(50,90)], fillcolor=(0,0,0), fillsize=8, outlinecolor=None, joinstyle=None)
-    ###img.drawmultiline(coords=[(10,50),(50,50),(90,55)], fillcolor=(0,111,0), fillsize=8, outlinecolor=None, joinstyle="miter")
+    #img.drawmultiline(coords=[(10,50),(50,50),(60,90)], fillcolor=(0,111,0), fillsize=12, outlinecolor=None, joinstyle="round")
 
     #SINGLE LINE TEST
     #img.drawline(22,11,88,77,fillcolor=(222,0,0),fillsize=8, capstyle="round")
@@ -989,4 +1042,4 @@ if __name__ == "__main__":
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
     #img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
     img.view()
-    img.save("C:/Users/BIGKIMO/Desktop/hmm.gif")
+    img.save("C:/Users/BIGKIMO/Desktop/hmm.png")
