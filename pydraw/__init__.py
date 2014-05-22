@@ -555,7 +555,7 @@ class Image(object):
             ##linepolygon.extend(list(reversed(linepolygon_right)))
             #self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
         
-    def _drawsimpleline(self, x1, y1, x2, y2, col, thick):
+    def _drawsimpleline(self, x1, y1, x2, y2, col, thick=1):
         """
         backend being used internally, holds the basic line algorithm, including antialiasing.
         taken and modified from a Stackoverflow post...
@@ -571,7 +571,7 @@ class Image(object):
             newtransp = c*255*thick #int(col[3]*c)
             newcolor = (col[0], col[1], col[2], newtransp)
             #newcolor = (int((p[0]*(1-c)) + col[0]*c), int((p[1]*(1-c)) + col[1]*c), int((p[2]*(1-c)) + col[2]*c))
-            self.put(int(x),int(y),newcolor)
+            self.put(int(round(x)),int(round(y)),newcolor)
 
         def iround(x):
             return ipart(x + 0.5)
@@ -599,7 +599,12 @@ class Image(object):
         try:
             gradient = float(dy) / float(dx)
         except ZeroDivisionError:
-            gradient = float(dy)
+            #pure vertical line, so just draw it without antialias
+            newtransp = 255*thick #int(col[3]*c)
+            newcolor = (col[0], col[1], col[2], newtransp)
+            for y in xrange(y1,y2+1):
+                self.plot(x1,y,color)
+            return
 
         #handle first endpoint
         xend = round(x1)
@@ -622,11 +627,11 @@ class Image(object):
 
         #main loop
         for x in xrange(int(xpxl1 + 1), int(xpxl2 )):
-            ybase = int(intery)
-            ydeci = intery-int(intery)
+            ybase = math.floor(intery)
+            ydeci = intery-ybase
             plot(x, ybase, 1-ydeci, col, steep)
             plot(x, ybase+1, ydeci, col, steep)
-            intery = intery + gradient
+            intery += gradient
 
     def drawbezier(self, xypoints, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, intervals=100):
         """
@@ -886,7 +891,7 @@ class Image(object):
 
 
 if __name__ == "__main__":
-    img = Image().new(1000,1000, background=(222,0,0))
+    img = Image().new(100,100, background=(222,0,0))
     #img = Image().load("C:/Users/BIGKIMO/Desktop/test2.png")
 
     #SINGLE PIXEL TEST
