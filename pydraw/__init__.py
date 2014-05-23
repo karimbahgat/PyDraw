@@ -95,7 +95,7 @@ import sys,os,math,operator,itertools
 #import submodules
 import png
 import geomhelper
-from geomhelper import _Line, _Bezier
+from geomhelper import _Line, _Bezier, _Arc
 
 
 #PYTHON VERSION CHECKING
@@ -350,11 +350,28 @@ class Image(object):
         except IndexError:
             pass #pixel outside img boundary
 
-    def pastedata(self, x, y, data, anchor="nw"):
+    def pastedata(self, x, y, data, anchor="nw", transparency=0):
         """
         Pastes a list of lists of pixels onto the image at the specified position
+        Note: for now, data has to be 3(rgb) tuples, not 4(rgba)
+        and only nw anchor supported for now
         """
-        pass
+        dataheight = len(data)
+        datawidth = len(data[0])
+        alpha = 255*transparency
+        if "n" in anchor:
+            if "w" in anchor:
+                datay = 0
+                for puty in xrange(y,y+dataheight):
+                    datax = 0
+                    for putx in xrange(x,x+datawidth):
+                        dpixel = data[datax][datay]
+                        r,g,b = dpixel
+                        dpixel = (r,g,b,alpha)
+                        self.put(putx,puty,dpixel)
+                        datax += 1
+                    datay += 1
+            
 
     def drawline(self, x1, y1, x2, y2, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
@@ -466,7 +483,7 @@ class Image(object):
                 linecoords = list(start)
                 linecoords.extend(list(end))
                 self.drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
-        elif joinstyle == None:
+        elif not joinstyle:
             for index in xrange(len(coords)-1):
                 start,end = coords[index],coords[index+1]
                 linecoords = list(start)
@@ -504,6 +521,10 @@ class Image(object):
                     line2_left,line2_right = line2.getbuffersides(linebuffer=buffersize)
                     midleft = line1_left.intersect(line2_left, infinite=True)
                     midright = line1_right.intersect(line2_right, infinite=True)
+                    if not midleft or not midright:
+                        #PROB FLOAT ERROR,SO NO INTERSECTION FOUND
+                        #CURRENTLY JUST SKIP DRAWING,BUT NEED BETTER HANDLING
+                        return
                     #add coords
                     linepolygon = []
                     linepolygon.extend([linepolygon_left[-1],midleft])
@@ -521,6 +542,10 @@ class Image(object):
                     line2_left,line2_right = line2.getbuffersides(linebuffer=buffersize)
                     midleft = line1_left.intersect(line2_left, infinite=True)
                     midright = line1_right.intersect(line2_right, infinite=True)
+                    if not midleft or not midright:
+                        #PROB FLOAT ERROR,SO NO INTERSECTION FOUND
+                        #CURRENTLY JUST SKIP DRAWING,BUT NEED BETTER HANDLING
+                        return
                     leftcurve = _Bezier([line1_left.tolist()[1],midleft,line2_left.tolist()[0]], intervals=20).coords
                     rightcurve = _Bezier([line1_right.tolist()[1],midright,line2_right.tolist()[0]], intervals=20).coords
                     #add coords
@@ -603,7 +628,7 @@ class Image(object):
             newtransp = 255*thick #int(col[3]*c)
             newcolor = (col[0], col[1], col[2], newtransp)
             for y in xrange(y1,y2+1):
-                self.plot(x1,y,color)
+                self.put(x1,y,newcolor)
             return
 
         #handle first endpoint
@@ -647,6 +672,20 @@ class Image(object):
         """
         curve = _Bezier(xypoints, intervals)
         self.drawmultiline(curve.coords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
+
+    def drawarc(self, x, y, radius, startangle, endangle, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1):
+        """
+        Warning:
+        Still early version, not really working yet...
+        Arcpoints go zigzag and not in sequence, and is slow
+
+        When done, inputs should be angleopening and angledirection..
+        """
+        arcpolygon_rel = _Arc(radius, startangle, endangle)
+        #arcpolygon_rel = sorted(arcpolygon_rel, key=operator.itemgetter(0,1))
+        arcpolygon = [(x,y)]
+        arcpolygon.extend([(x+arcx,y+arcy) for arcx,arcy in arcpolygon_rel])
+        self.drawpolygon(arcpolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
 
     def drawcircle(self, x, y, fillsize, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1): #, flatten=None, flatangle=None):
         """
@@ -917,5 +956,12 @@ if __name__ == "__main__":
     #img.drawbezier([(11,11),(90,40),(90,90)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
     #img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
+    img.drawarc(44,62,radius=10,startangle=33,endangle=277, outlinecolor=(0,0,222))
+
+    #TEST DATA PASTE
+    #img = Image().load("C:/Users/BIGKIMO/Desktop/puremap.png")
+    #data = Image().load("C:/Users/BIGKIMO/Desktop/hmm.png").imagegrid
+    #img.pastedata(444,222,data,transparency=0.5)
+    
     img.view()
     img.save("C:/Users/BIGKIMO/Desktop/hmm.png")
