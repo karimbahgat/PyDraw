@@ -297,6 +297,8 @@ class Image(object):
         | color | RGB color tuple to set to the pixel
 
         """
+        if x < 0 or y < 0:
+            return
         #if floating xy coords, make into semitransparent colors
         if isinstance(x, float) or isinstance(y, float):
             #calc values
@@ -546,6 +548,14 @@ class Image(object):
                         #PROB FLOAT ERROR,SO NO INTERSECTION FOUND
                         #CURRENTLY JUST SKIP DRAWING,BUT NEED BETTER HANDLING
                         return
+                    #ARC approach
+                    ##midx,midy = x2,y2
+                    ##oppositeangle = line1.anglebetween_inv(line2)
+                    ##bwangle = line1.anglebetween_abs(line2)
+                    ##leftangl,rightangl = oppositeangle-bwangle,oppositeangle+bwangle
+                    ##leftcurve = _Arc(midx,midy,radius=buffersize,startangle=leftangl,endangle=rightangl)
+                    ##rightcurve = _Arc(midx,midy,radius=buffersize,startangle=leftangl-180,endangle=rightangl-180)#[(midx,midy)] #how do inner arc?
+
                     leftcurve = _Bezier([line1_left.tolist()[1],midleft,line2_left.tolist()[0]], intervals=20).coords
                     rightcurve = _Bezier([line1_right.tolist()[1],midright,line2_right.tolist()[0]], intervals=20).coords
                     #add coords
@@ -673,18 +683,13 @@ class Image(object):
         curve = _Bezier(xypoints, intervals)
         self.drawmultiline(curve.coords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
 
-    def drawarc(self, x, y, radius, startangle, endangle, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1):
+    def drawarc(self, x, y, radius, opening=None, facing=None, startangle=None, endangle=None, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1):
         """
-        Warning:
-        Still early version, not really working yet...
-        Arcpoints go zigzag and not in sequence, and is slow
-
-        When done, inputs should be angleopening and angledirection..
+        Experimental, but seems to work correctly
+        Optional to use opening and facings args, or start and end angle args
         """
-        arcpolygon_rel = _Arc(radius, startangle, endangle)
-        #arcpolygon_rel = sorted(arcpolygon_rel, key=operator.itemgetter(0,1))
         arcpolygon = [(x,y)]
-        arcpolygon.extend([(x+arcx,y+arcy) for arcx,arcy in arcpolygon_rel])
+        arcpolygon.extend(_Arc(x, y, radius, opening=opening, facing=facing, startangle=startangle, endangle=endangle))
         self.drawpolygon(arcpolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
 
     def drawcircle(self, x, y, fillsize, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1): #, flatten=None, flatangle=None):
@@ -762,6 +767,7 @@ class Image(object):
             bbox = [min(xs), min(ys), max(xs), max(ys)]
             #begin
             xmin,ymin,xmax,ymax = bbox
+            ymin,ymax = map(int, map(round, (ymin,ymax)))
             for y in xrange(ymin,ymax+1):
                 fillxs = []
                 fillxs_half = []
@@ -956,7 +962,7 @@ if __name__ == "__main__":
     #img.drawbezier([(11,11),(90,40),(90,90)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
     #img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
-    img.drawarc(44,62,radius=10,startangle=33,endangle=277, outlinecolor=(0,0,222))
+    img.drawarc(44,62,radius=30,opening=90,facing=360, outlinecolor=(0,0,222), outlinewidth=1)
 
     #TEST DATA PASTE
     #img = Image().load("C:/Users/BIGKIMO/Desktop/puremap.png")
