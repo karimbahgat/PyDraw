@@ -31,7 +31,7 @@ Main features include:
 
 The main backdraws currently are:
 
-- only support for reading/writing gif images, and if you use to many colors the gif image won't save
+- only support for reading/writing gif images, and if you use too many colors the gif image won't save
 - while transparent gif images can be read, transparency will not be saved (becomes black)
 - not as fast as C-based libraries (on average 10x slower)
 - not a stable version yet, so several lacking features and errors (see Status below)
@@ -246,7 +246,7 @@ class Image(object):
         for p1,p2 in zip(pa, pb):
             grid.append([p1[0], p1[1], 1, 0, 0, 0, -p2[0]*p1[0], -p2[0]*p1[1]])
             grid.append([0, 0, 0, p1[0], p1[1], 1, -p2[1]*p1[0], -p2[1]*p1[1]])
-        import PyDraw.advmatrix as mt
+        import pydraw.advmatrix as mt
         A = mt.Matrix(grid)
         B = mt.Vec([xory for xy in pb for xory in xy])
         AT = A.tr()
@@ -374,7 +374,6 @@ class Image(object):
                         datax += 1
                     datay += 1
             
-
     def drawline(self, x1, y1, x2, y2, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
         Draws a single line.
@@ -554,7 +553,7 @@ class Image(object):
                     ##bwangle = line1.anglebetween_abs(line2)
                     ##leftangl,rightangl = oppositeangle-bwangle,oppositeangle+bwangle
                     ##leftcurve = _Arc(midx,midy,radius=buffersize,startangle=leftangl,endangle=rightangl)
-                    ##rightcurve = _Arc(midx,midy,radius=buffersize,startangle=leftangl-180,endangle=rightangl-180)#[(midx,midy)] #how do inner arc?
+                    ##rightcurve = _Arc(midx-buffersize,midy-buffersize,radius=buffersize,startangle=leftangl,endangle=rightangl) #[(midx,midy)] #how do inner arc?
 
                     leftcurve = _Bezier([line1_left.tolist()[1],midleft,line2_left.tolist()[0]], intervals=20).coords
                     rightcurve = _Bezier([line1_right.tolist()[1],midright,line2_right.tolist()[0]], intervals=20).coords
@@ -708,6 +707,7 @@ class Image(object):
         #flatangle=...
 
         #alternative circle algorithms
+            ### BEST: http://yellowsplash.wordpress.com/2009/10/23/fast-antialiased-circles-and-ellipses-from-xiaolin-wus-concepts/
             #http://stackoverflow.com/questions/1201200/fast-algorithm-for-drawing-filled-circles
             #http://willperone.net/Code/codecircle.php
             #http://www.mathopenref.com/coordcirclealgorithm.html
@@ -729,8 +729,13 @@ class Image(object):
             oldindex += 3
         #then draw and fill as polygon
         self.drawpolygon(circlepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+
+    def drawsquare(self, x,y,fillsize, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle=None):
+        halfsize = fillsize/2.0
+        rectanglecoords = [(x-halfsize,y-halfsize),(x+halfsize,y-halfsize),(x+halfsize,y+halfsize),(x-halfsize,y+halfsize),(x-halfsize,y-halfsize)]
+        self.drawpolygon(coords=rectanglecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
   
-    def drawpolygon(self, coords, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle="miter"):
+    def drawpolygon(self, coords, holes=[], fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle="miter"):
         """
         Draws a polygon based on input coordinates.
         Note: as with other primitives, fillcolor does not work properly.
@@ -738,13 +743,18 @@ class Image(object):
         | **option** | **description**
         | --- | --- 
         | coords | list of coordinate point pairs that make up the polygon. Automatically detects whether to enclose the polygon.
+        | *holes | optional list of one or more polygons that represent holes in the polygon, each hole being a list of coordinate point pairs. Hole polygon coordinates are automatically closed if they aren't already. 
         | **other | also accepts various color and size arguments, see the docstring for drawline.
         
         """
-        #maybe autocomplete polygon
+        #maybe autocomplete polygon and holes
         if coords[-1] != coords[0]:
             coords = list(coords)
             coords.append(coords[0])
+        for hole in holes:
+            if hole[-1] != hole[0]:
+                hole = list(hole)
+                hole.append(hole[0])
         #first fill insides of polygon
         if fillcolor:
             def pairwise(iterable):
@@ -757,7 +767,17 @@ class Image(object):
                 args = [iter(iterable)] * 2
                 return itertools.izip(*args)
             #main
-            ysortededges = [ list(flatten(sorted(eachedge, key=operator.itemgetter(1)))) for eachedge in pairwise(coords) ]
+            def coordsandholes():
+                #generator for exterior coords and holes
+                for edge in pairwise(coords):
+                    yield edge
+                if holes:
+                    for hole in holes:
+                        for edge in pairwise(hole):
+                            yield edge
+            #coordsandholes = [edge for edge in pairwise(coords)]
+            #coordsandholes.extend([edge for hole in holepolygons for edge in pairwise(hole)])
+            ysortededges = [ list(flatten(sorted(eachedge, key=operator.itemgetter(1)))) for eachedge in coordsandholes() ]
             ysortededges = list(sorted(ysortededges, key=operator.itemgetter(1)))
             edgeindex = 0
             curedge = ysortededges[edgeindex]
@@ -833,11 +853,21 @@ class Image(object):
 ##                            gradtransp += incr
             #cheating to draw antialiased edges as lines
             self.drawmultiline(coords, fillcolor=fillcolor, outlinecolor=None, fillsize=1)
+            for hole in holes:
+                self.drawmultiline(hole, fillcolor=fillcolor, outlinecolor=None, fillsize=1)
         #then draw outline
         if outlinecolor:
             coords.append(coords[1])
             self.drawmultiline(coords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None, joinstyle=outlinejoinstyle)
 
+    def drawrectangle(self, bbox, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle=None):
+        x1,y1,x2,y2 = bbox
+        rectanglecoords = [(x1,y1),(x1,y2),(x2,y2),(x2,y1),(x1,y1)]
+        self.drawpolygon(coords=rectanglecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
+
+    def drawarrow(self, x1, y1, x2, y2, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
+        pass
+        
     def floodfill(self,x,y,fillcolor,fuzzythresh=1.0):
         """
         Fill a large area of similarly colored neighboring pixels to the color at the origin point.
@@ -945,8 +975,11 @@ if __name__ == "__main__":
     #img.put(98,95.7,(0,0,222))
 
     #GREEN POLYGONS WITH OUTLINE
-    img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=12, outlinejoinstyle="round")
+    #img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=12, outlinejoinstyle="round")
     #img.drawpolygon(coords=[(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,222,0), outlinecolor=(0,0,0), outlinewidth=5, outlinejoinstyle="round")
+
+    #POLYGON WITH HOLES
+    img.drawpolygon(coords=[(30,30),(90,10),(90,90),(10,90),(30,30)], holes=[[(51,41),(77,51),(77,65),(51,77),(51,41)] , [(43,63),(49,63),(49,69),(43,69),(43,63)]], fillcolor=(222,222,0), outlinecolor=(0,0,0), outlinewidth=12, outlinejoinstyle="round")
 
     #MISC MULTILINE TEST
     #img.drawmultiline(coords=[(90,20),(80,20),(50,15),(20,44),(90,50),(50,90),(10,50),(30,20),(50,10)], fillcolor=(0,0,0), fillsize=8, outlinecolor=None, joinstyle="miter")
@@ -963,6 +996,8 @@ if __name__ == "__main__":
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
     #img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
     img.drawarc(44,62,radius=30,opening=90,facing=360, outlinecolor=(0,0,222), outlinewidth=1)
+    img.drawrectangle([42,42,88,55], fillcolor=(0,0,222), outlinecolor=(211,111,0), outlinewidth=4, outlinejoinstyle="round")
+    img.drawsquare(80,80,fillsize=13, fillcolor=(111,0,222), outlinecolor=(211,0,0), outlinewidth=1, outlinejoinstyle="miter")
 
     #TEST DATA PASTE
     #img = Image().load("C:/Users/BIGKIMO/Desktop/puremap.png")
