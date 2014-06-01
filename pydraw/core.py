@@ -22,7 +22,7 @@ else:
 
 class Image(object):
     #STARTING
-    def __init__(self,width=None,height=None,background=None,filepath=None,data=None):
+    def __init__(self,width=None,height=None,background=None,filepath=None,data=None,css=None):
         """
         The main image instance, which can load or create a new image.
         Also has various methods for drawing and transforming the image.
@@ -45,6 +45,7 @@ class Image(object):
         | *data | a list of lists containing RGB color tuples
         
         """
+        #initiate image
         if filepath or data:
             self._loadimage(filepath, data)
         else:
@@ -54,6 +55,13 @@ class Image(object):
                 background = (200,200,200)
             horizline = [background for _ in xrange(width)]
             self.imagegrid = [list(horizline) for _ in xrange(height)]
+        #set coordinate system
+        self.css = css
+        if css:
+            css.bindimage(img=self)
+            self.coordmode = True
+        else:
+            self.coordmode = False
 
     #TRANSFORM
 ##    def rotate(self):
@@ -93,11 +101,11 @@ class Image(object):
         newimg = Image().new(self.width,self.height)
         for y in xrange(len(self.imagegrid)):
             for x in xrange(len(self.imagegrid[0])):
-                color = self.get(x,y)
+                color = self._get(x,y)
                 newpos = pixel2sphere(x,y,z=0)
                 if newpos:
                     newx,newy,newz = newpos
-                    newimg.put(int(newx),int(newy),color)
+                    newimg._put(int(newx),int(newy),color)
         return newimg
     def tilt(self, oldplane, newplane):
         """
@@ -138,11 +146,11 @@ class Image(object):
         outimg = Image().new(self.width,self.height)
         for y in xrange(len(self.imagegrid)):
             for x in xrange(len(self.imagegrid[0])):
-                color = self.get(x,y)
+                color = self._get(x,y)
                 newx = int(round((a*x+b*y+c)/float(g*x+h*y+k)))
                 newy = int(round((d*x+e*y+f)/float(g*x+h*y+k)))
                 try:
-                    outimg.put(newx,newy,color)
+                    outimg._put(newx,newy,color)
                     #print x,y,newx,newy
                 except IndexError:
                     #out of bounds
@@ -160,6 +168,11 @@ class Image(object):
         | x/y | width/height position of the pixel to retrieve, with 0,0 being in topleft corner
         
         """
+        if self.coordmode:
+            x,y = self.css.point2pixel(x,y)
+        self._get(x,y,color)
+        
+    def _get(self,x,y):
         rgb = self.imagegrid[y][x]
         return rgb
     
@@ -175,7 +188,14 @@ class Image(object):
         | color | RGB color tuple to set to the pixel
 
         """
+        if self.coordmode:
+            x,y = self.css.point2pixel(x,y)
+        self._put(x,y,color)
+        
+    def _put(self, x,y,color):
+        #normal pixel drawing
         if x < 0 or y < 0:
+            #out of bounds
             return
         #if floating xy coords, make into semitransparent colors
         if isinstance(x, float) or isinstance(y, float):
@@ -195,23 +215,23 @@ class Image(object):
             #disperse pixels
             if xfloat and yfloat:
                 newcolor = (color[0],color[1],color[2],color[3]*x1transp*y1transp)
-                self.put(x1,y1,newcolor)
+                self._put(x1,y1,newcolor)
                 newcolor = (color[0],color[1],color[2],color[3]*x1transp*y2transp)
-                self.put(x1,y2,newcolor)
+                self._put(x1,y2,newcolor)
                 newcolor = (color[0],color[1],color[2],color[3]*x2transp*y1transp)
-                self.put(x2,y1,newcolor)
+                self._put(x2,y1,newcolor)
                 newcolor = (color[0],color[1],color[2],color[3]*x2transp*y2transp)
-                self.put(x2,y2,newcolor)
+                self._put(x2,y2,newcolor)
             elif xfloat:
                 newcolor = (color[0],color[1],color[2],color[3]*x1transp)
-                self.put(x1,yint,newcolor)
+                self._put(x1,yint,newcolor)
                 newcolor = (color[0],color[1],color[2],color[3]*x2transp)
-                self.put(x2,yint,newcolor)
+                self._put(x2,yint,newcolor)
             elif yfloat:
                 newcolor = (color[0],color[1],color[2],color[3]*y1transp)
-                self.put(xint,y1,newcolor)
+                self._put(xint,y1,newcolor)
                 newcolor = (color[0],color[1],color[2],color[3]*y2transp)
-                self.put(xint,y2,newcolor)
+                self._put(xint,y2,newcolor)
             return
         #or plot normal whole pixels
         elif len(color)==3:
@@ -221,7 +241,7 @@ class Image(object):
             #transparent color, blend with background
             t = color[3]/255.0
             try:
-                p = self.get(int(x),int(y))
+                p = self._get(int(x),int(y))
             except IndexError:
                 return #pixel outside img boundary
             color = (int((p[0]*(1-t)) + color[0]*t), int((p[1]*(1-t)) + color[1]*t), int((p[2]*(1-t)) + color[2]*t))
@@ -236,6 +256,8 @@ class Image(object):
         Note: for now, data has to be 3(rgb) tuples, not 4(rgba)
         and only nw anchor supported for now
         """
+        if self.coordmode:
+            x,y = self.css.point2pixel(x,y)
         dataheight = len(data)
         datawidth = len(data[0])
         alpha = 255*transparency
@@ -248,7 +270,7 @@ class Image(object):
                         dpixel = data[datax][datay]
                         r,g,b = dpixel
                         dpixel = (r,g,b,alpha)
-                        self.put(putx,puty,dpixel)
+                        self._put(putx,puty,dpixel)
                         datax += 1
                     datay += 1
             
@@ -269,7 +291,11 @@ class Image(object):
 ##        - bendfactor is strength/how far out the curve should extend from the line
 ##        - bendside is left or right side to bend
 ##        - bendanchor is the float ratio to offset the bend from its default anchor point at the center of the line.
-        
+        if self.coordmode:
+            (x1,y1),(x2,y2) = self.css.coords2pixels([(x1,y1),(x2,y2)])
+        self._drawline(x1,y1,x2,y2,fillcolor=fillcolor,outlinecolor=outlinecolor,fillsize=fillsize,outlinewidth=outlinewidth,capstyle=capstyle)
+
+    def _drawline(self, x1, y1, x2, y2, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         #decide to draw single or thick line with outline
         if fillsize <= 1:
             #draw single line
@@ -305,7 +331,7 @@ class Image(object):
                         args = [iter(iterable)] * 2
                         return itertools.izip(*args)
                     linepolygon = list(groupby2(linepolygon))
-                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+                    self._drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
                 elif capstyle == "round":
                     #left side
                     linepolygon.extend(leftlinecoords)
@@ -332,7 +358,7 @@ class Image(object):
                         args = [iter(iterable)] * 2
                         return itertools.izip(*args)
                     linepolygon = list(groupby2(linepolygon))
-                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+                    self._drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
                 elif capstyle == "projecting":
                     #left side
                     ytipbuff = buff * math.sin(math.radians(angl))
@@ -345,7 +371,7 @@ class Image(object):
                         args = [iter(iterable)] * 2
                         return itertools.izip(*args)
                     linepolygon = list(groupby2(linepolygon))
-                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+                    self._drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
 
     def drawmultiline(self, coords, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, joinstyle="miter"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
@@ -356,18 +382,23 @@ class Image(object):
         | coords | list of coordinate point pairs to be connected by lines
         | **other | also accepts various color and size arguments, see the docstring for drawline.
         """
+        if self.coordmode:
+            coords = self.css.coords2pixels(coords)
+        self._drawmultiline(coords,fillcolor=fillcolor,outlinecolor=outlinecolor,fillsize=fillsize,outlinewidth=outlinewidth,joinstyle=joinstyle)
+
+    def _drawmultiline(self, coords, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, joinstyle="miter"): #, bendfactor=None, bendside=None, bendanchor=None):
         if fillsize <= 1:
             for index in xrange(len(coords)-1):
                 start,end = coords[index],coords[index+1]
                 linecoords = list(start)
                 linecoords.extend(list(end))
-                self.drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
+                self._drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
         elif not joinstyle:
             for index in xrange(len(coords)-1):
                 start,end = coords[index],coords[index+1]
                 linecoords = list(start)
                 linecoords.extend(list(end))
-                self.drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
+                self._drawline(*linecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
         else:
             #lines are thick so they have to be joined
             def threewise(iterable):
@@ -408,7 +439,7 @@ class Image(object):
                     linepolygon = []
                     linepolygon.extend([linepolygon_left[-1],midleft])
                     linepolygon.extend([midright,linepolygon_right[-1]])
-                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+                    self._drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
                     linepolygon_left.append(midleft)
                     linepolygon_right.append(midright)
             elif joinstyle == "round":
@@ -441,7 +472,7 @@ class Image(object):
                     linepolygon.extend(leftcurve)
                     linepolygon.extend(list(reversed(rightcurve)))
                     linepolygon.append(linepolygon_right[-1])
-                    self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+                    self._drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
                     linepolygon_left.extend(leftcurve)
                     linepolygon_right.extend(rightcurve)
             elif joinstyle == "bevel":
@@ -457,7 +488,7 @@ class Image(object):
             linepolygon = []
             linepolygon.extend([linepolygon_left[-1],leftlinestart])
             linepolygon.extend([rightlinestart,linepolygon_right[-1]])
-            self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+            self._drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
             ##linepolygon_left.append(leftlinestart)
             ##linepolygon_right.append(rightlinestart)
             
@@ -465,11 +496,11 @@ class Image(object):
             ##linepolygon = []
             ##linepolygon.extend(linepolygon_left)
             ##linepolygon.extend(list(reversed(linepolygon_right)))
-            #self.drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+            #self._drawpolygon(linepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
         
     def _drawsimpleline(self, x1, y1, x2, y2, col, thick=1):
         """
-        backend being used internally, holds the basic line algorithm, including antialiasing.
+        Backend being used internally, holds the basic line algorithm, including antialiasing.
         taken and modified from a Stackoverflow post...
         appears to be a bit jagged, not as smooth as preferred, so
         need to look into how to improve/fix it.
@@ -479,11 +510,11 @@ class Image(object):
             if steep:
                 x,y = y,x
             #not entirely satisfied with quality yet, does some weird stuff when overlapping
-            #p = self.get(int(x),int(y))
+            #p = self._get(int(x),int(y))
             newtransp = c*255*thick #int(col[3]*c)
             newcolor = (col[0], col[1], col[2], newtransp)
             #newcolor = (int((p[0]*(1-c)) + col[0]*c), int((p[1]*(1-c)) + col[1]*c), int((p[2]*(1-c)) + col[2]*c))
-            self.put(int(round(x)),int(round(y)),newcolor)
+            self._put(int(round(x)),int(round(y)),newcolor)
 
         def iround(x):
             return ipart(x + 0.5)
@@ -515,7 +546,7 @@ class Image(object):
             newtransp = 255*thick #int(col[3]*c)
             newcolor = (col[0], col[1], col[2], newtransp)
             for y in xrange(y1,y2+1):
-                self.put(x1,y,newcolor)
+                self._put(x1,y,newcolor)
             return
 
         #handle first endpoint
@@ -557,17 +588,27 @@ class Image(object):
         | *intervals | how finegrained/often the curve should be bent, default is 100, ie curves every one percent of the line.
         
         """
+        if self.coordmode:
+            xypoints = self.css.coords2pixels(xypoints)
+        self._drawbezier(xypoints,fillcolor=fillcolor,outlinecolor=outlinecolor,fillsize=fillsize,outlinewidth=outlinewidth,intervals=intervals)
+
+    def _drawbezier(self, xypoints, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, intervals=100):
         curve = _Bezier(xypoints, intervals)
-        self.drawmultiline(curve.coords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
+        self._drawmultiline(curve.coords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize)
 
     def drawarc(self, x, y, radius, opening=None, facing=None, startangle=None, endangle=None, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1):
         """
         Experimental, but seems to work correctly
         Optional to use opening and facings args, or start and end angle args
         """
+        if self.coordmode:
+            x,y = self.css.point2pixel(x,y)
+        self._drawarc(x,y,radius,opening,facing,startangle,endangle,fillcolor=fillcolor,outlinecolor=outlinecolor,outlinewidth=outlinewidth)
+        
+    def _drawarc(self, x, y, radius, opening=None, facing=None, startangle=None, endangle=None, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1):        
         arcpolygon = [(x,y)]
         arcpolygon.extend(_Arc(x, y, radius, opening=opening, facing=facing, startangle=startangle, endangle=endangle))
-        self.drawpolygon(arcpolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+        self._drawpolygon(arcpolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
 
     def drawcircle(self, x, y, fillsize, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1): #, flatten=None, flatangle=None):
         """
@@ -583,7 +624,11 @@ class Image(object):
         #later on add ability to make that circle an ellipse with these args:
         #flatten=...
         #flatangle=...
+        if self.coordmode:
+            x,y = self.css.point2pixel(x,y)
+        self._drawcircle(x,y,fillsize, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
 
+    def _drawcircle(self, x, y, fillsize, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1): #, flatten=None, flatangle=None):
         #alternative circle algorithms
             ### BEST: http://yellowsplash.wordpress.com/2009/10/23/fast-antialiased-circles-and-ellipses-from-xiaolin-wus-concepts/
             #http://stackoverflow.com/questions/1201200/fast-algorithm-for-drawing-filled-circles
@@ -602,16 +647,21 @@ class Image(object):
         for index in xrange(4):
             cornerpoints = relcontrolpoints[oldindex-1:oldindex+3]
             cornerpoints = [(x+relx,y+rely) for relx,rely in cornerpoints]
-            #self.drawbezier(cornerpoints, fillsize=outlinewidth, fillcolor=outlinecolor, outlinecolor=None, intervals=int(fillsize*20))
+            #self._drawbezier(cornerpoints, fillsize=outlinewidth, fillcolor=outlinecolor, outlinecolor=None, intervals=int(fillsize*20))
             circlepolygon.extend(_Bezier(cornerpoints, intervals=int(fillsize*3)).coords)
             oldindex += 3
         #then draw and fill as polygon
-        self.drawpolygon(circlepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
+        self._drawpolygon(circlepolygon, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth)
 
     def drawsquare(self, x,y,fillsize, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle=None):
+        if self.coordmode:
+            x,y = self.css.point2pixel(x,y)
+        self._drawsquare(x,y,fillsize, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
+
+    def _drawsquare(self, x,y,fillsize, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle=None):
         halfsize = fillsize/2.0
         rectanglecoords = [(x-halfsize,y-halfsize),(x+halfsize,y-halfsize),(x+halfsize,y+halfsize),(x-halfsize,y+halfsize),(x-halfsize,y-halfsize)]
-        self.drawpolygon(coords=rectanglecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
+        self._drawpolygon(coords=rectanglecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
   
     def drawpolygon(self, coords, holes=[], fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle="miter"):
         """
@@ -625,6 +675,13 @@ class Image(object):
         | **other | also accepts various color and size arguments, see the docstring for drawline.
         
         """
+        if self.coordmode:
+            coords = self.css.coords2pixels(coords)
+            if holes:
+                holes = [self.css.coords2pixels(hole) for hole in holes]
+        self._drawpolygon(coords,holes=holes,fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
+
+    def _drawpolygon(self, coords, holes=[], fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle="miter"):
         #maybe autocomplete polygon and holes
         if coords[-1] != coords[0]:
             coords = list(coords)
@@ -708,7 +765,7 @@ class Image(object):
                     for fillmin,fillmax in groupby2(fillxs):
                         fillmin,fillmax = map(int,map(round,(fillmin,fillmax)))
                         for x in xrange(fillmin,fillmax+1):
-                            self.put(x,y,fillcolor)
+                            self._put(x,y,fillcolor)
 ##                if fillxs_half:
 ##                    r,g,b = fillcolor[:3]
 ##                    downflag = True
@@ -722,26 +779,32 @@ class Image(object):
 ##                        gradtransp = 0
 ##                        for x in xrange(fillmin,fillmax+1):
 ##                            gradcolor = (r,g,b,gradtransp)
-##                            self.put(x,y,gradcolor)
+##                            self._put(x,y,gradcolor)
 ##                            gradcolor_inv = (r,g,b,255-gradtransp)
 ##                            if downflag:
-##                                self.put(x,y-1,gradcolor_inv)
+##                                self._put(x,y-1,gradcolor_inv)
 ##                            else:
-##                                self.put(x,y+1,gradcolor_inv)
+##                                self._put(x,y+1,gradcolor_inv)
 ##                            gradtransp += incr
             #cheating to draw antialiased edges as lines
-            self.drawmultiline(coords, fillcolor=fillcolor, outlinecolor=None, fillsize=1)
+            self._drawmultiline(coords, fillcolor=fillcolor, outlinecolor=None, fillsize=1)
             for hole in holes:
-                self.drawmultiline(hole, fillcolor=fillcolor, outlinecolor=None, fillsize=1)
+                self._drawmultiline(hole, fillcolor=fillcolor, outlinecolor=None, fillsize=1)
         #then draw outline
         if outlinecolor:
             coords.append(coords[1])
-            self.drawmultiline(coords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None, joinstyle=outlinejoinstyle)
+            self._drawmultiline(coords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None, joinstyle=outlinejoinstyle)
 
     def drawrectangle(self, bbox, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle=None):
+        if self.coordmode:
+            x1,y1,x2,y2 = bbox
+            (x1,y1),(x2,y2) = self.css.coords2pixels([(x1,y1),(x2,y2)])
+            bbox = [x1,y1,x2,y2]
+        self._drawrectangle(bbox, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
+    def _drawrectangle(self, bbox, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle=None):
         x1,y1,x2,y2 = bbox
         rectanglecoords = [(x1,y1),(x1,y2),(x2,y2),(x2,y1),(x1,y1)]
-        self.drawpolygon(coords=rectanglecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
+        self._drawpolygon(coords=rectanglecoords, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
 
     def drawarrow(self, x1, y1, x2, y2, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         pass
@@ -759,22 +822,27 @@ class Image(object):
         | fillcolor | the new RGB color tuple to replace the old colors with
         
         """
+        if self.coordmode:
+            x,y = self.css.point2pixel(x,y)
+        self._floodfill(x,y,fillcolor,fuzzythresh=fuzzythresh)
+
+    def _floodfill(self,x,y,fillcolor,fuzzythresh=1.0):
         #test and fill all neighbouring cells
         fillcolor = list(fillcolor)
-        colortofollow = self.get(x,y)
+        colortofollow = self._get(x,y)
         sqrt = math.sqrt
         def notexactcolor(x,y):
-            if self.get(x,y) != colortofollow:
+            if self._get(x,y) != colortofollow:
                 return True
         def notfuzzycolor(x,y):
             """based on W3 principles, http://www.had2know.com/technology/color-contrast-calculator-web-design.html
             but doesnt really work yet, super slow, likely due to the if bigger than test operation"""
-            #r,g,b = self.get(x,y)
+            #r,g,b = self._get(x,y)
             #checkbrightness = ( 299*r + 587*g + 114*b )/1000
             #r,g,b = colortofollow
             #comparebrightness = ( 299*r + 587*g + 114*b )/1000
             #brightnessdiff = float(str((checkbrightness-comparebrightness)/255.0).replace("-",""))#sqrt(((checkbrightness-comparebrightness)/255.0)**2)
-            main = self.get(x,y)
+            main = self._get(x,y)
             compare = colortofollow
             colordiff = sum([spec[0]-spec[1] for spec in zip(main,compare)])/255.0
             if colordiff > fuzzythresh:
@@ -789,7 +857,7 @@ class Image(object):
                     continue
             except IndexError:
                 continue
-            self.put(x,y,fillcolor)
+            self._put(x,y,fillcolor)
             theStack.append( (x + 1, y) )  # right
             theStack.append( (x - 1, y) )  # left
             theStack.append( (x, y + 1) )  # down
@@ -857,7 +925,7 @@ class Image(object):
                 #GIF
                 tempwin = tk.Tk()
                 tempimg = tk.PhotoImage(file=filepath)
-                data = [[tuple([int(spec) for spec in tempimg.get(x,y).split()])
+                data = [[tuple([int(spec) for spec in tempimg._get(x,y).split()])
                         for x in xrange(tempimg.width())]
                         for y in xrange(tempimg.height())]
                 self.width = len(data[0])

@@ -3,9 +3,11 @@
 if __name__ == "__main__":
     
     import pydraw
-    
-    img = pydraw.Image(100,100, background=(222,0,0))
+
+    css = pydraw.CoordinateSystem([0,0,100,100])
+    img = pydraw.Image(900,900, background=(222,0,0), css=css)
     #img = Image(filepath="C:/Users/BIGKIMO/Desktop/hmm.png")
+    #print css.getinfo()
 
     #SINGLE PIXEL TEST
     img.put(94.7,94.7,(0,0,222))
@@ -33,9 +35,9 @@ if __name__ == "__main__":
     #img.drawbezier([(11,11),(90,40),(90,90)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
     #img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
-    ##img.drawarc(44,62,radius=30,opening=90,facing=360, outlinecolor=(0,0,222), outlinewidth=1)
-    ##img.drawrectangle([42,42,88,55], fillcolor=(0,0,222), outlinecolor=(211,111,0), outlinewidth=4, outlinejoinstyle="round")
-    ##img.drawsquare(80,80,fillsize=13, fillcolor=(111,0,222), outlinecolor=(211,0,0), outlinewidth=1, outlinejoinstyle="miter")
+    img.drawarc(44,62,radius=30,opening=90,facing=360, outlinecolor=(0,0,222), outlinewidth=1)
+    img.drawrectangle([42,42,88,55], fillcolor=(0,0,222), outlinecolor=(211,111,0), outlinewidth=4, outlinejoinstyle="round")
+    img.drawsquare(80,80,fillsize=13, fillcolor=(111,0,222), outlinecolor=(211,0,0), outlinewidth=1, outlinejoinstyle="miter")
 
     #TEST DATA PASTE
     #img = Image().load("C:/Users/BIGKIMO/Desktop/puremap.png")
@@ -46,11 +48,10 @@ if __name__ == "__main__":
     img.save("C:/Users/BIGKIMO/Desktop/hmm.png")
 
     #TEST COORDINATE SYSTEM TO PIXELS
-##    img = pydraw.Image(600,600, background=(222,0,0))
-##    cs = pydraw.CoordinateSystem([-180,-90,180,90], img)
+##    css = pydraw.CoordinateSystem([-180,90,180,-90])
+##    img = pydraw.Image(600,600, background=(222,0,0), css=css)
+##    print css.getinfo()
 ##    poly = [(-170,-80),(-170,80),(170,80),(170,-80)]
-##    poly_trans = cs.coords2pixels(poly)
 ##    holes = [[(-100,-50),(-100,50),(100,10),(100,-50)]]
-##    holes_trans = [ cs.coords2pixels(hole) for hole in holes ]
-##    img.drawpolygon(poly_trans, holes=holes_trans)
+##    img.drawpolygon(poly, holes=holes)
 ##    img.view()
