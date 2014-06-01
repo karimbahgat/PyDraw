@@ -43,6 +43,17 @@ class Image(object):
         | --- | --- 
         | *filepath | the string path of the image file to load, with extension
         | *data | a list of lists containing RGB color tuples
+
+        Regardless of how the image is initialized, if a coordinate system instance
+        is passed as an argument then all subsequent drawing coordinates will
+        relate to that coordinate system (instead of pixels) and be automatically
+        converted to pixel coordinates. After assigning a coordinate system to the
+        image, the user can continue to draw to pixel coordinates by setting the
+        ".coordmode" property to False.
+
+        | **option** | **description**
+        | --- | --- 
+        | *css | a coordinate system instance that defines the desired coordinate space of the image. 
         
         """
         #initiate image
@@ -808,7 +819,32 @@ class Image(object):
 
     def drawarrow(self, x1, y1, x2, y2, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         pass
-        
+
+    def drawgeojson(self, geojobj, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, joinstyle="miter", outlinejoinstyle="miter", capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
+        """
+        Takes any object that has the __geo_interface__ attribute
+        """
+        geojson = geojobj.__geo_interface__
+        geotype = geojson["type"]
+        coords = geojson["coordinates"]
+        if geotype == "Polygon":
+            if self.coordmode:
+                coords = [self.css.coords2pixels(polyorhole) for polyorhole in coords]
+            exterior = coords[0]
+            interiors = []
+            if len(coords) > 1:
+                interiors.extend(coords[1:])
+            self._drawpolygon(exterior, holes=interiors, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
+        elif geotype == "MultiPolygon":
+            if self.coordmode:
+                coords = ([self.css.coords2pixels(polyorhole) for polyorhole in eachmulti] for eachmulti in coords)
+            for eachmulti in coords:
+                exterior = eachmulti[0]
+                interiors = []
+                if len(eachmulti) > 1:
+                    interiors.extend(eachmulti[1:])
+                self._drawpolygon(exterior, holes=interiors, fillcolor=fillcolor, outlinecolor=outlinecolor, outlinewidth=outlinewidth, outlinejoinstyle=outlinejoinstyle)
+    
     def floodfill(self,x,y,fillcolor,fuzzythresh=1.0):
         """
         Fill a large area of similarly colored neighboring pixels to the color at the origin point.

@@ -5,7 +5,7 @@ if __name__ == "__main__":
     import pydraw
 
     css = pydraw.CoordinateSystem([0,0,100,100])
-    img = pydraw.Image(900,900, background=(222,0,0), css=css)
+    img = pydraw.Image(880,440, background=(222,0,0), css=css)
     #img = Image(filepath="C:/Users/BIGKIMO/Desktop/hmm.png")
     #print css.getinfo()
 
