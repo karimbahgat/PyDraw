@@ -827,7 +827,25 @@ class Image(object):
         geojson = geojobj.__geo_interface__
         geotype = geojson["type"]
         coords = geojson["coordinates"]
-        if geotype == "Polygon":
+        if geotype == "Point":
+            if self.coordmode:
+                coords = self.css.point2pixel(*coords)
+            self._drawcircle(*coords, fillsize=fillsize, outlinecolor=outlinecolor, fillcolor=fillcolor, outlinewidth=outlinewidth)
+        elif geotype == "MultiPoint":
+            if self.coordmode:
+                coords = self.css.coords2pixels(coords)
+            for point in coords:
+                self._drawcircle(*point, fillsize=fillsize, outlinecolor=outlinecolor, fillcolor=fillcolor, outlinewidth=outlinewidth)
+        elif geotype == "LineString":
+            if self.coordmode:
+                coords = self.css.coords2pixels(coords)
+            self._drawmultiline(coords, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize, outlinewidth=outlinewidth, joinstyle=joinstyle)
+        elif geotype == "MultiLineString":
+            if self.coordmode:
+                coords = (self.css.coords2pixels(eachmulti) for eachmulti in coords)
+            for eachmulti in coords:
+                self._drawmultiline(eachmulti, fillcolor=fillcolor, outlinecolor=outlinecolor, fillsize=fillsize, outlinewidth=outlinewidth, joinstyle=joinstyle)
+        elif geotype == "Polygon":
             if self.coordmode:
                 coords = [self.css.coords2pixels(polyorhole) for polyorhole in coords]
             exterior = coords[0]
