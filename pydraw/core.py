@@ -3,7 +3,8 @@
 
 import sys,os,math,operator,itertools
 #import submodules
-import png
+import _fileformats
+from _fileformats import png,bmp
 import geomhelper
 from geomhelper import _Line, _Bezier, _Arc
 
@@ -721,8 +722,6 @@ class Image(object):
                     for hole in holes:
                         for edge in pairwise(hole):
                             yield edge
-            #coordsandholes = [edge for edge in pairwise(coords)]
-            #coordsandholes.extend([edge for hole in holepolygons for edge in pairwise(hole)])
             ysortededges = [ list(flatten(sorted(eachedge, key=operator.itemgetter(1)))) for eachedge in coordsandholes() ]
             ysortededges = list(sorted(ysortededges, key=operator.itemgetter(1)))
             edgeindex = 0
@@ -758,18 +757,6 @@ class Image(object):
                     if intersection:
                         ix,iy = intersection
                         fillxs.append(ix)
-##                        if edge.slope:
-##                            ix_below = ix + 1/float(edge.slope)
-##                            if edge.slope < 0:
-##                                fillxs.append(ix)
-##                            else:
-##                                fillxs.append(ix_below)
-##                            halfx = (ix,ix_below)
-##                            if halfx[1]-halfx[0] > 1.5 or halfx[0]-halfx[1] > 1.5:
-##                                #only do antialias fill if fillspan will be 2 pixels or more
-##                                fillxs_half.append(halfx)
-##                        else:
-##                            fillxs.append(ix)
                 #scan line and fill
                 fillxs = sorted(fillxs)
                 if fillxs:
@@ -777,26 +764,6 @@ class Image(object):
                         fillmin,fillmax = map(int,map(round,(fillmin,fillmax)))
                         for x in xrange(fillmin,fillmax+1):
                             self._put(x,y,fillcolor)
-##                if fillxs_half:
-##                    r,g,b = fillcolor[:3]
-##                    downflag = True
-##                    for fillmin,fillmax in fillxs_half:
-##                        if fillmin > fillmax:
-##                            fillmin,fillmax = fillmax,fillmin
-##                            downflag = False
-##                        fillmin,fillmax = map(int,map(round,(fillmin,fillmax)))
-##                        gradlength = fillmax-fillmin
-##                        incr = 255/float(gradlength)
-##                        gradtransp = 0
-##                        for x in xrange(fillmin,fillmax+1):
-##                            gradcolor = (r,g,b,gradtransp)
-##                            self._put(x,y,gradcolor)
-##                            gradcolor_inv = (r,g,b,255-gradtransp)
-##                            if downflag:
-##                                self._put(x,y-1,gradcolor_inv)
-##                            else:
-##                                self._put(x,y+1,gradcolor_inv)
-##                            gradtransp += incr
             #cheating to draw antialiased edges as lines
             self._drawmultiline(coords, fillcolor=fillcolor, outlinecolor=None, fillsize=1)
             for hole in holes:
@@ -805,6 +772,9 @@ class Image(object):
         if outlinecolor:
             coords.append(coords[1])
             self._drawmultiline(coords, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None, joinstyle=outlinejoinstyle)
+            for hole in holes:
+                hole.append(hole[1])
+                self._drawmultiline(hole, fillcolor=outlinecolor, fillsize=outlinewidth, outlinecolor=None, joinstyle=outlinejoinstyle)
 
     def drawrectangle(self, bbox, fillcolor=(0,0,0), outlinecolor=None, outlinewidth=1, outlinejoinstyle=None):
         if self.coordmode:

@@ -1,6 +1,11 @@
 #GEOMETRY HELPER CLASSES
 import math
 
+class _Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
 class _Line:
     def __init__(self, x1,y1,x2,y2):
         self.x1,self.y1,self.x2,self.y2 = x1,y1,x2,y2
@@ -60,6 +65,33 @@ class _Line:
                 return ix,iy
             else:
                 return False
+    def distance2point(self, point, getpoint=False, relativedist=False):
+        """
+        - point is a _Point instance with x and y attributes
+        - getpoint, when True will not only return the distance but also the point on the line that was closest, in a tuple (dist, _Point instance)
+        - relativedist, if comparing many distances is more important than getting the actual distance then this can be set to True which will return the squared distance without the squareroot which makes it faster
+        """
+        x3,y3 = point.x,point.y
+        x1,y1,x2,y2 = self.x1,self.y1,self.x2,self.y2
+        #below is taken directly from http://stackoverflow.com/questions/849211/shortest-distance-between-a-point-and-a-line-segment
+        px = x2-x1
+        py = y2-y1
+        something = px*px + py*py
+        u =  ((x3 - x1) * px + (y3 - y1) * py) / float(something)
+        if u > 1:
+            u = 1
+        elif u < 0:
+            u = 0
+        x = x1 + u * px
+        y = y1 + u * py
+        dx = x - x3
+        dy = y - y3
+        #prepare results
+        if relativedist: dist = dx*dx + dy*dy
+        else: dist = math.sqrt(dx*dx + dy*dy)
+        if getpoint: result = (dist,_Point(x,y))
+        else: result = dist
+        return result
     def getlength(self):
         return math.hypot(self.xdiff,self.ydiff)
     def getangle(self):
@@ -471,7 +503,7 @@ def _Arc(x, y, radius, opening=None, facing=None, startangle=None, endangle=None
         return points #, xy
 
     #flexible approach of creating any type of arc
-    if startangle and endangle:
+    if startangle != None and endangle != None:
         #use precomputed startend angles
         pass
     else:
@@ -492,3 +524,9 @@ def _Arc(x, y, radius, opening=None, facing=None, startangle=None, endangle=None
     else:
         arccoords.extend(getarc(x, y, radius, start=startangle, end=endangle))
     return arccoords
+
+if __name__ == "__main__":
+    line = _Line(10,10,1,2)
+    point = _Point(5,10)
+    dist,point = line.distance2point(point, getpoint=True)
+    print dist,point.x,point.y
