@@ -1,5 +1,8 @@
 To do list:
 
+- fix coordinate to pixel conversion
+- make so coord sizes change along with coordinate system
+- allow drawing on and arranging layers
 - Make scanline fill do antialiased as well
 - Also make it support selfintersecting polygons...
 
