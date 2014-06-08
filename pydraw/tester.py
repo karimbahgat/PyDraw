@@ -1,11 +1,12 @@
 #Tester for the PyDraw module
 
-if __name__ == "__main__":
+def testall():
     
     import pydraw
 
     crs = pydraw.CoordinateSystem([0,0,100,100])
     img = pydraw.Image(880,440, background=(222,0,0), crs=crs)
+    img.drawgridticks()
     #img = Image(filepath="C:/Users/BIGKIMO/Desktop/hmm.png")
     #print crs.getinfo()
 
@@ -32,7 +33,7 @@ if __name__ == "__main__":
     ##img.drawline(44,33,55,80,fillcolor=(222,0,0),fillsize=0.5)
 
     #VARIOUS OTHER SHAPES
-    #img.drawbezier([(11,11),(90,40),(90,90)])
+    img.drawbezier([(10,10),(50,140),(90,10)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
     #img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
     img.drawarc(44,62,radius=30,opening=90,facing=360, outlinecolor=(0,0,222), outlinewidth=1)

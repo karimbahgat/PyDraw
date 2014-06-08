@@ -602,7 +602,7 @@ class Image(object):
         """
         if self.coordmode:
             xypoints = self.crs.coords2pixels(xypoints)
-        self._drawbezier(xypoints,fillcolor=fillcolor,outlinecolor=outlinecolor,fillsize=fillsize,outlinewidth=outlinewidth,intervals=intervals)
+        self._drawbezier(xypoints,fillcolor=fillcolor,outlinecolor=outlinecolor,fillsize=fillsize,intervals=intervals)
 
     def _drawbezier(self, xypoints, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, intervals=100):
         curve = _Bezier(xypoints, intervals)
@@ -790,6 +790,59 @@ class Image(object):
     def drawarrow(self, x1, y1, x2, y2, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         pass
 
+    def drawgridticks(self, every_x=10, every_y=10):
+        """
+        Draws grid ticks on the edge of the image representing the scale
+        of the coordinate system.
+
+        - every_x/y: the distance between each tickmark on each axis, in
+        coordinates if using a coordinate system, or in pixels. Set to 0 or
+        None to disable any of the axes. 
+
+        Note: If you're using a coordinate system its x axis must originate from
+        the left side of the screen and its y axis from the top side in order
+        for the ticks to be drawn. 
+        """
+        #set some params
+        if self.width < self.height:
+            tickindent = self.width*0.02
+        else:
+            tickindent = self.height*0.02
+        tickthick = tickindent*0.10
+        #loop thru tickmarks
+        if every_x:
+            if self.crs:
+                topy = self.crs.ytop
+                xpos = self.crs.xleft
+                while xpos < self.crs.xright:
+                    tickpixelcoords = self.crs.coords2pixels([(xpos,topy),(xpos,topy)])
+                    (x1,y1),(x2,y2) = tickpixelcoords
+                    y2 += tickindent
+                    self._drawline(x1,y1,x2,y2,fillcolor=(0,0,0),fillsize=tickthick)
+                    xpos += every_x
+            else:
+                topy = 0
+                xpos = 0
+                while xpos < self.width:
+                    self._drawline(xpos,topy,xpos,topy+tickindent,fillcolor=(0,0,0),fillsize=tickthick)
+                    xpos += every_x
+        if every_y:
+            if self.crs:
+                leftx = self.crs.xleft
+                ypos = self.crs.ytop
+                while ypos < self.crs.ybottom:
+                    tickpixelcoords = self.crs.coords2pixels([(leftx,ypos),(leftx,ypos)])
+                    (x1,y1),(x2,y2) = tickpixelcoords
+                    x2 += tickindent+1
+                    self._drawline(x1,y1,x2,y2,fillcolor=(0,0,0),fillsize=tickthick)
+                    ypos += every_y
+            else:
+                leftx = 0
+                ypos = 0
+                while ypos < self.yheight:
+                    self._drawline(ypos,bottomy,xpos+tickindent+1,bottomy,fillcolor=(0,0,0),fillsize=tickthick)
+                    ypos += self.yheight
+
     def drawgeojson(self, geojobj, fillcolor=(0,0,0), outlinecolor=None, fillsize=1, outlinewidth=1, joinstyle="miter", outlinejoinstyle="miter", capstyle="butt"): #, bendfactor=None, bendside=None, bendanchor=None):
         """
         Takes any object that has the __geo_interface__ attribute
@@ -968,3 +1021,8 @@ class Image(object):
         imgstring = " ".join(["{"+" ".join(["#%02x%02x%02x" %tuple(rgb) for rgb in horizline])+"}" for horizline in self.imagegrid])
         tkimg.put(imgstring)
         return tkimg
+
+if __name__ == "__main__":
+    import pydraw.tester as tester
+    tester.testall()
+    
