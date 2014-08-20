@@ -40,8 +40,14 @@ class _Line:
             self.zero_y = None
     def __str__(self):
         return str(self.tolist())
+    @property
+    def start(self):
+        return (self.x1,self.y1)
+    @property
+    def end(self):
+        return (self.x2,self.y2)    
     def tolist(self):
-        return ((self.x1,self.y1),(self.x2,self.y2))
+        return (self.start,self.end)
     def intersect(self, otherline, infinite=False):
         """
         Input must be another line instance

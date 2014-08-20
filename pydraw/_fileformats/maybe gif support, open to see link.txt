@@ -1,0 +1,8 @@
+https://github.com/stonecrop/pygif
+OR
+https://mail.python.org/pipermail/image-sig/2007-July/004508.html
+OR
+https://github.com/sgk/tepco-usage-api/blob/master/pygif.py
+OR
+BEST???????
+https://github.com/jsvine/gifparse
