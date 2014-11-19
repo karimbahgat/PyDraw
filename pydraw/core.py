@@ -11,12 +11,24 @@ from geomhelper import _Line, _Bezier, _Arc
 
 #PYTHON VERSION CHECKING
 PYTHON3 = int(sys.version[0]) == 3
-if PYTHON3:
-    xrange = range
-    range = list(range)
+if PYTHON3:           
     import tkinter as tk
-else:
+else:           
     import Tkinter as tk
+
+
+def xrange(start_or_stop, stop=None, step=1):
+    
+    if stop == None:
+        start = 0
+        stop = start_or_stop
+    else:
+        start = start_or_stop
+        
+    cur = start
+    while cur < stop:
+        yield cur
+        cur += step
 
 
 #THE CLASSES

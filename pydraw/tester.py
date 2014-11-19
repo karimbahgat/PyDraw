@@ -35,7 +35,7 @@ def testall():
     #VARIOUS OTHER SHAPES
     img.drawbezier([(10,10),(50,140),(90,10)])
     #img.drawpolygon([(90,50),(90-5,50-5),(90+5,50+5),(90-5,50+5),(90,50)], fillcolor=(222,0,0))
-    #img.drawcircle(50,50,fillsize=8, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
+    img.drawcircle(50,50,fillsize=30, fillcolor=(222,222,0), outlinecolor=(0,0,222), outlinewidth=1)
     img.drawarc(44,62,radius=30,opening=90,facing=360, outlinecolor=(0,0,222), outlinewidth=1)
     img.drawrectangle([42,42,88,55], fillcolor=(0,0,222), outlinecolor=(211,111,0), outlinewidth=4, outlinejoinstyle="round")
     img.drawsquare(80,80,fillsize=13, fillcolor=(111,0,222), outlinecolor=(211,0,0), outlinewidth=1, outlinejoinstyle="miter")
