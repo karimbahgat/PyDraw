@@ -138,6 +138,12 @@ class Image(object):
         in order to tilt an image the way one wants. Need to make the arguments more
         user-friendly and handle the oldplane/newplane behind the scenes.
         Some hints on how to do that at http://www.cs.utexas.edu/~fussell/courses/cs384g/lectures/lecture20-Z_buffer_pipeline.pdf
+        Also see:
+        http://gamedev.stackexchange.com/questions/72565/3d-camera-rotation
+        "new perspective" method in https://github.com/ezag/pyeuclid/blob/master/euclid.py
+        http://stackoverflow.com/questions/18404890/how-to-build-perspective-projection-matrix-no-api
+        slides 2 to 9 at http://kogs-www.informatik.uni-hamburg.de/~neumann/BV-WS-2007/BV-3-07.pdf
+        
 
         | **option** | **description**
         | --- | --- 
